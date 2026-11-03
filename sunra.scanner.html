@@ -266,7 +266,7 @@
 <div id="scanner" hidden>
   <video id="video" playsinline muted></video>
   <div class="frame"></div>
-  <div class="bar"><span class="mut" id="scanMsg">Apuntá al código de barras</span><button id="btnScanClose">Cerrar</button></div>
+  <div class="bar"><span class="mut" id="scanMsg">Apuntá al código de barras</span><span style="display:flex;gap:8px"><button id="btnLuz" hidden>Luz</button><button id="btnOcr" hidden>Leer texto</button><button id="btnScanClose">Cerrar</button></span></div>
 </div>
 
 <script>
@@ -872,6 +872,19 @@ const FORMATS = ['code_39','code_128','qr_code','data_matrix','ean_13','code_93'
 
 document.querySelectorAll('[data-scan]').forEach(b => b.onclick = () => openScanner(b.dataset.scan));
 $('btnScanClose').onclick = closeScanner;
+$('btnOcr').onclick = () => leerTexto();
+
+// Linterna del celular (Android/Chrome; en iPhone el navegador no lo permite y el boton no aparece)
+let luzOn = false;
+async function setLuz(on){
+  const t = scanStream && scanStream.getVideoTracks()[0];
+  if (!t) return;
+  try { await t.applyConstraints({ advanced: [{ torch: on }] }); luzOn = on; }
+  catch { luzOn = false; }
+  $('btnLuz').textContent = luzOn ? 'Apagar luz' : 'Luz';
+  $('btnLuz').classList.toggle('pri', luzOn);
+}
+$('btnLuz').onclick = () => setLuz(!luzOn);
 
 // Lector alternativo (ZXing) para navegadores sin BarcodeDetector: iPhone, Bluefy, Chrome en Windows
 const ZXING_URL = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
@@ -918,13 +931,19 @@ async function openScanner(target){
     alert('No se pudo abrir el lector: ' + e.message + '\nPodés escribir el número a mano.'); return;
   }
   const v = $('video'); v.setAttribute('playsinline', ''); v.srcObject = scanStream; await v.play();
-  $('scanner').hidden = false; $('scanMsg').textContent = 'Apuntá al código de barras';
+  $('scanner').hidden = false;
+  $('btnOcr').hidden = target === 'wifiqr';
+  luzOn = false; $('btnLuz').textContent = 'Luz'; $('btnLuz').classList.remove('pri');
+  try { const cap = scanStream.getVideoTracks()[0].getCapabilities?.() || {}; $('btnLuz').hidden = !cap.torch; }
+  catch { $('btnLuz').hidden = true; }
+  $('scanMsg').textContent = target === 'wifiqr' ? 'Apuntá al código QR' : 'Apuntá al código o tocá "Leer texto"';
   const cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently:true });
   let invert = false;
   const done = raw => {
     if (scanTarget === 'wifiqr') { closeScanner(); aplicarWifiQr(raw); return; }
     const val = raw.trim().toUpperCase();
     $(scanTarget).value = scanTarget === 'fVin' ? val.replace(/[^A-Z0-9]/g,'').slice(-17) : val;
+    ocrNota(scanTarget, '');
     if (navigator.vibrate) navigator.vibrate(80);
     closeScanner(); validate(); loadHistory();
   };
@@ -960,6 +979,126 @@ function closeScanner(){
   clearTimeout(scanLoop);
   if (scanStream) scanStream.getTracks().forEach(t => t.stop());
   scanStream = null; $('scanner').hidden = true;
+}
+
+
+// ================= Lectura de TEXTO (OCR) del N° de serie o VIN =================
+// Se usa cuando el codigo de barras no se puede leer (rayado, sucio, VIN grabado en el chasis).
+// Toma la imagen del recuadro verde y la lee con Tesseract (en el celular, sin enviar la foto a ningun lado).
+const TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+let tessWorker = null, tessLoading = null, ocrOcupado = false;
+function loadTesseract(){
+  if (tessWorker) return Promise.resolve(tessWorker);
+  if (!tessLoading) tessLoading = new Promise((ok, bad) => {
+    const go = async () => {
+      try {
+        const w = await Tesseract.createWorker('eng');
+        await w.setParameters({ tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', tessedit_pageseg_mode: '6' });
+        tessWorker = w; ok(w);
+      } catch (e) { tessLoading = null; bad(e); }
+    };
+    if (window.Tesseract) return go();
+    const sc = document.createElement('script'); sc.src = TESS_URL; sc.onload = go;
+    sc.onerror = () => { tessLoading = null; bad(new Error('no se pudo cargar el lector de texto (¿sin internet?)')); };
+    document.head.appendChild(sc);
+  });
+  return tessLoading;
+}
+
+// Recorte del recuadro verde en coordenadas del video (el video se muestra con object-fit: cover)
+function recorteRecuadro(v){
+  const fr = document.querySelector('#scanner .frame').getBoundingClientRect(), vr = v.getBoundingClientRect();
+  const esc = Math.max(vr.width / v.videoWidth, vr.height / v.videoHeight);
+  const ox = (vr.width - v.videoWidth * esc) / 2, oy = (vr.height - v.videoHeight * esc) / 2;
+  let x = (fr.left - vr.left - ox) / esc, y = (fr.top - vr.top - oy) / esc, w = fr.width / esc, h = fr.height / esc;
+  x = Math.max(0, x); y = Math.max(0, y); w = Math.min(v.videoWidth - x, w); h = Math.min(v.videoHeight - y, h);
+  return { x, y, w, h };
+}
+
+// Imagen en grises con contraste; invertida si la etiqueta es clara sobre oscuro
+function prepararImagen(v, r, invertir){
+  const sc = Math.min(2, 1400 / r.w), cv = document.createElement('canvas');
+  cv.width = Math.round(r.w * sc); cv.height = Math.round(r.h * sc);
+  const ctx = cv.getContext('2d', { willReadFrequently:true });
+  ctx.filter = (invertir ? 'invert(1) ' : '') + 'grayscale(1) contrast(1.6)';
+  ctx.drawImage(v, r.x, r.y, r.w, r.h, 0, 0, cv.width, cv.height);
+  return cv;
+}
+function esOscura(v, r){
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 32;
+  const ctx = cv.getContext('2d', { willReadFrequently:true });
+  ctx.drawImage(v, r.x, r.y, r.w, r.h, 0, 0, 64, 32);
+  const d = ctx.getImageData(0, 0, 64, 32).data; let s = 0;
+  for (let k = 0; k < d.length; k += 4) s += d[k] * .3 + d[k + 1] * .59 + d[k + 2] * .11;
+  return s / (d.length / 4) < 110;
+}
+
+// Digito verificador del VIN (posicion 9). Los VIN chinos lo usan.
+function vinDigitoOk(vin){
+  const val = c => /\d/.test(c) ? +c : 'A1B2C3D4E5F6G7H8J1K2L3M4N5P7R9S2T3U4V5W6X7Y8Z9'.match(new RegExp(c + '(\\d)'))[1] * 1;
+  const pes = [8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2];
+  let s = 0; for (let k = 0; k < 17; k++) s += val(vin[k]) * pes[k];
+  const r = s % 11; return vin[8] === (r === 10 ? 'X' : String(r));
+}
+// En un VIN no existen I, O ni Q: el OCR suele confundirlas con 1 y 0
+const vinLimpio = t => t.replace(/[IO]/g, m => m === 'I' ? '1' : '0').replace(/Q/g, '0');
+
+function candidatos(texto, objetivo){
+  const lineas = texto.toUpperCase().split(/\n+/).map(l => l.replace(/[^A-Z0-9]/g, '')).filter(Boolean);
+  if (objetivo === 'fVin') {
+    const res = [];
+    for (const l of lineas) {
+      const t = vinLimpio(l);
+      for (let k = 0; k + 17 <= t.length; k++) {
+        const c = t.substr(k, 17);
+        if (VIN_RE.test(c)) res.push({ valor: c, ok: vinDigitoOk(c) });
+      }
+    }
+    return res.sort((a, b) => b.ok - a.ok);
+  }
+  return lineas.filter(l => l.length >= 6 && l.length <= 40).sort((a, b) => b.length - a.length).map(l => ({ valor: l, ok: null }));
+}
+
+async function leerTexto(){
+  if (ocrOcupado || !scanStream) return;
+  const v = $('video'); if (!v.videoWidth) return;
+  ocrOcupado = true; const b = $('btnOcr'); b.disabled = true;
+  try {
+    $('scanMsg').textContent = tessWorker ? 'Leyendo texto…' : 'Preparando el lector de texto (solo la primera vez)…';
+    const w = await loadTesseract();
+    $('scanMsg').textContent = 'Leyendo texto…';
+    const r = recorteRecuadro(v), oscura = esOscura(v, r);
+    let mejor = null;
+    for (const inv of [oscura, !oscura]) {                // primero la mas probable, despues la otra
+      if (!scanStream) return;
+      const { data } = await w.recognize(prepararImagen(v, r, inv));
+      const c = candidatos(data.text || '', scanTarget)[0];
+      if (c && (!mejor || (c.ok && !mejor.ok) || (mejor.ok === null && c.valor.length > mejor.valor.length))) mejor = c;
+      if (mejor && mejor.ok) break;
+    }
+    if (!mejor) { $('scanMsg').textContent = 'No se pudo leer. Acercá el celular o mejorá la luz y probá de nuevo.'; return; }
+    const destino = scanTarget;
+    $(destino).value = mejor.valor;
+    if (navigator.vibrate) navigator.vibrate(80);
+    closeScanner(); validate(); loadHistory();
+    ocrNota(destino, destino === 'fVin'
+      ? (mejor.ok ? 'Leído como texto. Revisá que coincida con el chasis.' : 'Leído como texto, pero el dígito de control no coincide: revisalo con cuidado.')
+      : 'Leído como texto. Revisá que coincida con la etiqueta.');
+    $(destino).focus();
+  } catch (e) {
+    $('scanMsg').textContent = 'Error del lector de texto: ' + e.message;
+  } finally { ocrOcupado = false; b.disabled = false; }
+}
+
+// Aviso debajo del campo cuando el dato se leyo como texto (puede tener errores)
+function ocrNota(campo, txt){
+  let el = document.getElementById('ocr_' + campo);
+  if (!el) {
+    el = document.createElement('div'); el.id = 'ocr_' + campo; el.className = 'warnbox';
+    $(campo).closest('.inrow').after(el);
+    $(campo).addEventListener('input', () => { el.hidden = true; });
+  }
+  el.textContent = txt; el.hidden = !txt;
 }
 
 // ================= WiFi desde el QR (formato WIFI:T:WPA;S:red;P:clave;;) =================
