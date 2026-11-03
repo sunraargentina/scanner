@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1418">
+<title>Sunra Scanner · Administración</title>
+<style>
+  :root{--bg:#0f1418;--panel:#171e24;--line:#26313a;--txt:#e8eef2;--mut:#8a99a6;--acc:#2fd08a;--warn:#ffb020;--bad:#ff5a5f;--blue:#4aa8ff;--yel:#f5c400}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{position:sticky;top:0;z-index:5;background:rgba(15,20,24,.96);border-bottom:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px}
+  header h1{font-size:17px;margin:0;flex:1} header h1 small{display:block;font-size:11px;color:var(--mut);font-weight:400}
+  .logo{width:10px;height:22px;background:var(--yel);border-radius:3px}
+  button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--txt);border-radius:10px;padding:8px 12px;cursor:pointer}
+  button.pri{background:var(--acc);color:#04210f;border-color:var(--acc);font-weight:600}
+  button.bad{border-color:var(--bad);color:var(--bad)} button.ok{border-color:var(--acc);color:var(--acc)} button.warn{border-color:var(--warn);color:var(--warn)}
+  button:disabled{opacity:.45}
+  main{padding:12px;max-width:980px;margin:auto;display:grid;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+  input,select,textarea{font:inherit;background:#121a20;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:9px 10px;width:100%}
+  .tabs{display:flex;gap:6px;overflow-x:auto}
+  .tabs button.on{background:var(--txt);color:var(--bg);border-color:var(--txt)}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .stats div{background:#121a20;border-radius:10px;padding:8px 10px} .stats b{font-size:22px;display:block} .stats span{font-size:12px;color:var(--mut)}
+  .esc{display:grid;gap:6px}
+  .esc .top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+  .esc .name{font-weight:600;font-family:ui-monospace,Consolas,monospace}
+  .badge{font-size:12px;padding:3px 9px;border-radius:20px;border:1px solid}
+  .b-activo{color:var(--acc);border-color:var(--acc)} .b-bloqueado{color:var(--bad);border-color:var(--bad)} .b-liberar{color:var(--warn);border-color:var(--warn)}
+  .mut{color:var(--mut);font-size:13px} .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:13px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  th{color:var(--mut);font-weight:500} .scroll{overflow-x:auto}
+  .mono{font-family:ui-monospace,Consolas,monospace}
+  .err{color:var(--bad);font-size:13px;min-height:16px}
+  [hidden]{display:none!important}
+  #login{max-width:380px;margin:12vh auto 0}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--txt);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:30}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<header>
+  <span class="logo"></span>
+  <h1>Sunra Scanner · Administración <small id="who">—</small></h1>
+  <button id="btnOut" hidden>Salir</button>
+</header>
+
+<section id="login" class="card">
+  <h2 style="margin:0 0 12px;font-size:18px">Ingresar</h2>
+  <div style="display:grid;gap:10px">
+    <input id="lEmail" type="email" placeholder="Email" autocomplete="username">
+    <input id="lPass" type="password" placeholder="Contraseña" autocomplete="current-password">
+    <button class="pri" id="btnIn">Ingresar</button>
+    <div class="err" id="lErr"></div>
+  </div>
+</section>
+
+<main id="app" hidden>
+  <div class="tabs">
+    <button data-tab="esc" class="on">Escáneres</button>
+    <button data-tab="usos">Usos</button>
+    <button data-tab="bat">Baterías</button>
+    <button data-tab="fw">Firmware</button>
+  </div>
+
+  <!-- ESCANERES -->
+  <section id="tab-esc" style="display:grid;gap:12px">
+    <div class="stats">
+      <div><b id="sAct">-</b><span>Activos</span></div>
+      <div><b id="sBloq">-</b><span>Bloqueados</span></div>
+      <div><b id="sLib">-</b><span>Liberados</span></div>
+    </div>
+    <div class="row"><input id="fEsc" placeholder="Buscar por escáner, N° de cliente o razón social" style="flex:1"><button id="btnRefEsc">Actualizar</button></div>
+    <div id="escList" style="display:grid;gap:10px"></div>
+  </section>
+
+  <!-- USOS -->
+  <section id="tab-usos" hidden style="display:grid;gap:12px">
+    <div class="row"><input id="fUso" placeholder="Filtrar por ID de escáner o N° de cliente" style="flex:1"><button id="btnRefUso">Actualizar</button></div>
+    <div class="card scroll"><table><thead><tr><th>Fecha</th><th>Escáner</th><th>Cliente</th><th>Razón social</th><th>Resultado</th></tr></thead><tbody id="usoBody"></tbody></table></div>
+  </section>
+
+  <!-- BATERIAS -->
+  <section id="tab-bat" hidden style="display:grid;gap:12px">
+    <div class="row"><input id="fBat" placeholder="N° de serie de batería o VIN (vacío = últimas de cada batería)" style="flex:1"><button class="pri" id="btnBat">Buscar</button><button id="btnCsv">CSV</button></div>
+    <div class="mut" id="batInfo"></div>
+    <div class="card scroll"><table><thead id="batHead"></thead><tbody id="batBody"></tbody></table></div>
+  </section>
+
+  <!-- FIRMWARE -->
+  <section id="tab-fw" hidden style="display:grid;gap:12px">
+    <div class="card" style="display:grid;gap:10px">
+      <b>Subir versión nueva</b>
+      <span class="mut">En Arduino IDE: subí FW_VERSION en el código → Programa → Exportar binario compilado → elegí <span class="mono">sunra_scanner_s3.ino.bin</span> o <span class="mono">sunra_scanner_devkit.ino.bin</span> (no el "merged" ni el "bootloader"). La placa se detecta sola desde el archivo.</span>
+      <input id="fwFile" type="file" accept=".bin">
+      <div class="row"><input id="fwVer" placeholder="Versión (ej. 1.0.1) — la misma que FW_VERSION" style="flex:1"></div>
+      <input id="fwNotas" placeholder="Notas: qué cambia en esta versión">
+      <button class="pri" id="btnFwUp">Subir firmware</button>
+      <div class="err" id="fwErr"></div>
+    </div>
+    <div class="mut">Los escáneres con WiFi buscan actualizaciones cada 10 minutos y se actualizan cuando no están en uso. Los que no tienen WiFi reciben el aviso en la app y se actualizan con los datos del celular. La versión publicada es la que reciben todos (salvo los que tengan una versión forzada).</div>
+    <div id="fwList" style="display:grid;gap:10px"></div>
+  </section>
+</main>
+
+<script>
+// ================= CONFIGURACION (la misma que sunra.bms.html) =================
+const SUPABASE_URL = 'https://tiwryaujnlvjburzfmqq.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpd3J5YXVqbmx2amJ1cnpmbXFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2NjM4MTAsImV4cCI6MjEwOTIzOTgxMH0.RPZumfRs6J05b8CedtR8RR2oi1a3RNdiTagpHxBp2qU';
+// ==============================================================================
+
+const $ = id => document.getElementById(id);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fdt = d => d ? new Date(d).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' }) : '—';
+const bleName = id => 'SUNRA-SCAN-' + String(id).slice(-4);
+const online = e => e.ultimo_ping && (Date.now() - new Date(e.ultimo_ping)) < 25 * 60000;   // contacto en los ultimos 25 min
+let firmwares = [];
+const PLACAS = { s3lcd: 'Waveshare S3 con pantalla', devkit: 'ESP32 DevKit' };
+const placaTxt = p => PLACAS[p] || 'sin datos';
+// Placa segun el id de chip del .bin (bytes 12-13 del encabezado): ESP32 = 0, ESP32-S3 = 9
+const CHIP_PLACA = { 0: 'devkit', 9: 's3lcd' };
+let escaneres = [], lastBat = [];
+
+function toast(t){ const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2500); }
+
+// ---------------- Sesion ----------------
+async function checkSession(){
+  const { data } = await sb.auth.getSession();
+  const user = data.session?.user;
+  $('login').hidden = !!user; $('app').hidden = !user; $('btnOut').hidden = !user;
+  $('who').textContent = user ? user.email : 'Sin sesión';
+  if (user) loadEsc();
+}
+$('btnIn').onclick = async () => {
+  $('lErr').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email: $('lEmail').value.trim(), password: $('lPass').value });
+  if (error) { $('lErr').textContent = 'No se pudo ingresar: ' + error.message; return; }
+  checkSession();
+};
+$('lPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnIn').click(); });
+$('btnOut').onclick = async () => { await sb.auth.signOut(); checkSession(); };
+
+// ---------------- Pestañas ----------------
+document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+function showTab(t){
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  ['esc','usos','bat','fw'].forEach(x => $('tab-' + x).hidden = x !== t);
+  if (t === 'usos') loadUsos();
+  if (t === 'fw') loadFw();
+  if (t === 'bat' && !lastBat.length) loadBat();
+}
+
+// ---------------- Escaneres ----------------
+async function loadEsc(){
+  const { data, error } = await sb.from('escaneres').select('*').order('ultimo_uso', { ascending:false, nullsFirst:false });
+  if (error) { $('escList').innerHTML = `<div class="err">Error: ${esc(error.message)}. ¿Tu email está en la tabla admins?</div>`; return; }
+  escaneres = data;
+  $('sAct').textContent = data.filter(e => e.estado === 'activo').length;
+  $('sBloq').textContent = data.filter(e => e.estado === 'bloqueado').length;
+  $('sLib').textContent = data.filter(e => e.estado === 'liberar').length;
+  renderEsc();
+}
+function renderEsc(){
+  const q = $('fEsc').value.trim().toLowerCase();
+  const list = escaneres.filter(e => !q || [e.id, bleName(e.id), e.cliente, e.cliente_nombre].some(v => String(v ?? '').toLowerCase().includes(q)));
+  if (!list.length) { $('escList').innerHTML = '<div class="card mut">No hay escáneres' + (q ? ' con ese filtro' : ' registrados todavía. Aparecen solos en la primera puesta en marcha.') + '</div>'; return; }
+  $('escList').innerHTML = list.map(e => `
+    <div class="card esc">
+      <div class="top">
+        <div><span class="name">${esc(bleName(e.id))}</span> <span class="mut mono">${esc(e.id)}</span></div>
+        <span class="badge b-${esc(e.estado)}">${e.estado === 'liberar' ? 'liberado (espera nuevo cliente)' : esc(e.estado)}</span>
+      </div>
+      <div class="grid2">
+        <span class="mut">Cliente</span><span>${e.cliente ? 'N° ' + esc(e.cliente) : '—'}</span>
+        <span class="mut">Razón social</span><span>${esc(e.cliente_nombre) || '—'}</span>
+        <span class="mut">Vinculado</span><span>${fdt(e.vinculado_en)}</span>
+        <span class="mut">Último uso</span><span>${fdt(e.ultimo_uso)}</span>
+        <span class="mut">Placa</span><span>${placaTxt(e.placa)}</span>
+        <span class="mut">Firmware</span><span>${esc(e.fw_version) || '—'}${e.fw_objetivo ? ` <span style="color:var(--warn)">→ forzado ${esc(e.fw_objetivo)}</span>` : ''}</span>
+        <span class="mut">WiFi</span><span>${e.wifi_ssid ? `${esc(e.wifi_ssid)} · ${esc(e.wifi_ip || '')}${e.wifi_rssi ? ' · ' + e.wifi_rssi + ' dBm' : ''}` : 'no configurado'}</span>
+        <span class="mut">Último contacto WiFi</span><span>${e.ultimo_ping ? `<span style="color:${online(e) ? 'var(--acc)' : 'var(--mut)'}">${fdt(e.ultimo_ping)}${online(e) ? ' · en línea' : ''}</span>` : '—'}</span>
+        ${e.motivo_bloqueo ? `<span class="mut">Motivo bloqueo</span><span style="color:var(--bad)">${esc(e.motivo_bloqueo)}</span>` : ''}
+        ${e.notas ? `<span class="mut">Notas</span><span>${esc(e.notas)}</span>` : ''}
+      </div>
+      <div class="row" style="margin-top:4px">
+        ${e.estado !== 'bloqueado' ? `<button class="bad" data-act="bloquear" data-id="${e.id}">Bloquear</button>` : `<button class="ok" data-act="desbloquear" data-id="${e.id}">Desbloquear</button>`}
+        ${e.estado !== 'liberar' ? `<button class="warn" data-act="liberar" data-id="${e.id}">Liberar / reasignar</button>` : ''}
+        <button data-act="editar" data-id="${e.id}">Editar</button>
+        <button data-act="firmware" data-id="${e.id}">Firmware</button>
+        <button data-act="usos" data-id="${e.id}">Ver usos</button>
+      </div>
+    </div>`).join('');
+  document.querySelectorAll('[data-act]').forEach(b => b.onclick = () => accion(b.dataset.act, b.dataset.id));
+}
+$('fEsc').addEventListener('input', renderEsc);
+$('btnRefEsc').onclick = loadEsc;
+
+async function updEsc(id, cambios, okMsg){
+  const { error } = await sb.from('escaneres').update(cambios).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  toast(okMsg); loadEsc();
+}
+
+async function accion(act, id){
+  const e = escaneres.find(x => x.id === id), n = bleName(id);
+  if (act === 'bloquear') {
+    const motivo = prompt(`Bloquear ${n} (${e.cliente_nombre || 'sin cliente'}).\nMotivo:`, 'Concesionario cerrado');
+    if (motivo === null) return;
+    updEsc(id, { estado:'bloqueado', motivo_bloqueo: motivo || 'Bloqueado por administración' }, n + ' bloqueado. Se aplica en la próxima conexión.');
+  } else if (act === 'desbloquear') {
+    if (!confirm(`¿Desbloquear ${n}? Vuelve a funcionar para ${e.cliente_nombre || 'su cliente'} (N° ${e.cliente}).`)) return;
+    updEsc(id, { estado:'activo', motivo_bloqueo:null }, n + ' desbloqueado.');
+  } else if (act === 'liberar') {
+    if (!confirm(`¿Liberar ${n}?\nSe desvincula de ${e.cliente_nombre || 'su cliente'} y en la próxima conexión va a pedir N° de cliente y razón social de nuevo.`)) return;
+    updEsc(id, { estado:'liberar' }, n + ' liberado.');
+  } else if (act === 'editar') {
+    const cli = prompt('N° de cliente:', e.cliente || ''); if (cli === null) return;
+    const nom = prompt('Razón social:', e.cliente_nombre || ''); if (nom === null) return;
+    const notas = prompt('Notas internas (opcional):', e.notas || ''); if (notas === null) return;
+    updEsc(id, { cliente: cli.trim().toUpperCase() || null, cliente_nombre: nom.trim() || null, notas: notas.trim() || null }, n + ' actualizado.');
+  } else if (act === 'firmware') {
+    if (!firmwares.length) await loadFw(true);
+    const pl = e.placa || 's3lcd';
+    const fws = firmwares.filter(f => f.placa === pl);
+    const pub = fws.find(f => f.publicada);
+    const lista = fws.map(f => f.version + (f.publicada ? ' (publicada)' : '')).join(', ') || 'ninguna subida para esta placa';
+    const v = prompt(`Firmware para ${n} (${placaTxt(pl)})\nActual: ${e.fw_version || 'desconocida'}\nDisponibles: ${lista}\n\nEscribí la versión a instalar en ESTE equipo, o dejá vacío para que siga la publicada${pub ? ' (' + pub.version + ')' : ''}:`, e.fw_objetivo || '');
+    if (v === null) return;
+    const ver = v.trim();
+    if (ver && !fws.some(f => f.version === ver)) { alert('Esa versión no está subida para esta placa.'); return; }
+    updEsc(id, { fw_objetivo: ver || null }, ver ? `${n} instalará ${ver} en su próximo contacto por WiFi.` : `${n} sigue la versión publicada.`);
+  } else if (act === 'usos') {
+    $('fUso').value = id; showTab('usos');
+  }
+}
+
+// ---------------- Usos ----------------
+const RES = { O:['Uso normal','var(--acc)'], V:['Vinculado','var(--blue)'], B:['Bloqueado','var(--bad)'] };
+async function loadUsos(){
+  let q = sb.from('intentos').select('*').order('creado', { ascending:false }).limit(300);
+  const f = $('fUso').value.trim();
+  if (f) q = q.or(`escaner_id.ilike.%${f}%,cliente.ilike.%${f}%`);
+  const { data, error } = await q;
+  if (error) { $('usoBody').innerHTML = `<tr><td colspan="5" class="err">${esc(error.message)}</td></tr>`; return; }
+  $('usoBody').innerHTML = data.length ? data.map(u => {
+    const r = RES[u.resultado] || [u.resultado, 'var(--mut)'];
+    return `<tr><td>${fdt(u.creado)}</td><td class="mono">${esc(bleName(u.escaner_id))}</td><td>${esc(u.cliente)}</td><td>${esc(u.cliente_nombre)}</td><td style="color:${r[1]}">${r[0]}</td></tr>`;
+  }).join('') : '<tr><td colspan="5" class="mut">Sin registros</td></tr>';
+}
+$('btnRefUso').onclick = loadUsos;
+$('fUso').addEventListener('keydown', e => { if (e.key === 'Enter') loadUsos(); });
+
+// ---------------- Baterias y lecturas ----------------
+const COLS_RES = [['serie_bateria','Batería'],['vin_actual','VIN actual'],['cliente_nombre','Concesionario'],['ultima_lectura','Última lectura'],['soh','SOH %'],['ciclos','Ciclos'],['soc','SOC %'],['celda_dif','Dif mV'],['protect','Prot.']];
+const COLS_LEC = [['creado','Fecha'],['serie_bateria','Batería'],['vin','VIN'],['cliente_nombre','Concesionario'],['tecnico','Técnico'],['voltaje','V'],['corriente','A'],['soc','SOC %'],['soh','SOH %'],['ciclos','Ciclos'],['celda_dif','Dif mV'],['protect','Prot.'],['alarm','Alarma']];
+let batCols = COLS_RES;
+
+async function loadBat(){
+  const f = $('fBat').value.trim().toUpperCase();
+  let data, error;
+  if (!f) {
+    ({ data, error } = await sb.from('baterias').select('*').order('ultima_lectura', { ascending:false }).limit(300));
+    batCols = COLS_RES; $('batInfo').textContent = 'Último estado de cada batería (tocá una fila para ver su historial)';
+  } else {
+    ({ data, error } = await sb.from('lecturas').select('*').or(`serie_bateria.eq.${f},vin.eq.${f}`).order('creado', { ascending:false }).limit(500));
+    batCols = COLS_LEC; $('batInfo').textContent = data ? `${data.length} lecturas para ${f}` : '';
+  }
+  if (error) { $('batBody').innerHTML = `<tr><td class="err">${esc(error.message)}</td></tr>`; return; }
+  lastBat = data;
+  $('batHead').innerHTML = '<tr>' + batCols.map(c => `<th>${c[1]}</th>`).join('') + (f ? '<th></th>' : '') + '</tr>';
+  $('batBody').innerHTML = data.length ? data.map(r => `<tr ${!f ? `data-serie="${esc(r.serie_bateria)}" style="cursor:pointer"` : ''}>` +
+    batCols.map(([k]) => {
+      let v = r[k];
+      if (k === 'creado' || k === 'ultima_lectura') v = fdt(v);
+      if ((k === 'protect' || k === 'alarm') && v) return `<td style="color:var(--bad)">0x${Number(v).toString(16).toUpperCase()}</td>`;
+      if (k === 'protect' || k === 'alarm') v = '—';
+      return `<td class="${k.includes('vin') || k === 'serie_bateria' ? 'mono' : ''}">${esc(v ?? '—')}</td>`;
+    }).join('') + (f ? `<td><button class="bad" data-del="${r.id}" style="padding:3px 8px">Borrar</button></td>` : '') + '</tr>').join('')
+    : `<tr><td class="mut" colspan="${batCols.length}">Sin resultados</td></tr>`;
+  document.querySelectorAll('[data-serie]').forEach(tr => tr.onclick = () => { $('fBat').value = tr.dataset.serie; loadBat(); });
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!confirm('¿Borrar esta lectura? No se puede deshacer.')) return;
+    const { error } = await sb.from('lecturas').delete().eq('id', b.dataset.del);
+    if (error) alert('Error: ' + error.message); else { toast('Lectura borrada'); loadBat(); }
+  });
+}
+$('btnBat').onclick = loadBat;
+$('fBat').addEventListener('keydown', e => { if (e.key === 'Enter') loadBat(); });
+$('btnCsv').onclick = () => {
+  if (!lastBat.length) return;
+  const keys = batCols.map(c => c[0]);
+  const csv = [batCols.map(c => c[1]), ...lastBat.map(r => keys.map(k => r[k] ?? ''))]
+    .map(row => row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type:'text/csv' }));
+  a.download = 'sunra-baterias-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+};
+
+// ---------------- Firmware ----------------
+const fmtKB = b => b ? (b / 1024).toFixed(0) + ' KB' : '—';
+async function loadFw(silent){
+  const { data, error } = await sb.from('firmware').select('*').order('creado', { ascending:false });
+  if (error) { if (!silent) $('fwList').innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+  firmwares = data;
+  if (silent) return;
+  if (!escaneres.length) await loadEsc();
+  $('fwList').innerHTML = data.length ? data.map(f => {
+    const mismaPlaca = e => (e.placa || 's3lcd') === f.placa;
+    const enUso = escaneres.filter(e => mismaPlaca(e) && e.fw_version === f.version).length;
+    const forz = escaneres.filter(e => mismaPlaca(e) && e.fw_objetivo === f.version).length;
+    return `<div class="card esc">
+      <div class="top"><span class="name">v${esc(f.version)} · ${placaTxt(f.placa)}</span>
+        ${f.publicada ? '<span class="badge b-activo">publicada</span>' : '<span class="badge" style="color:var(--mut);border-color:var(--line)">no publicada</span>'}</div>
+      <div class="grid2">
+        <span class="mut">Subida</span><span>${fdt(f.creado)}</span>
+        <span class="mut">Tamaño</span><span>${fmtKB(f.tamano)}</span>
+        <span class="mut">Equipos con esta versión</span><span>${enUso}${forz ? ` · ${forz} forzados` : ''}</span>
+        <span class="mut">SHA-256</span><span class="mono" style="font-size:11px">${esc(f.sha256.slice(0, 16))}…</span>
+        ${f.notas ? `<span class="mut">Notas</span><span>${esc(f.notas)}</span>` : ''}
+      </div>
+      <div class="row" style="margin-top:4px">
+        ${f.publicada ? `<button class="warn" data-fw="despublicar" data-v="${esc(f.version)}" data-p="${f.placa}">Despublicar</button>` : `<button class="ok" data-fw="publicar" data-v="${esc(f.version)}" data-p="${f.placa}">Publicar para todos</button>`}
+        ${!f.publicada && !forz ? `<button class="bad" data-fw="borrar" data-v="${esc(f.version)}" data-p="${f.placa}">Borrar</button>` : ''}
+      </div></div>`;
+  }).join('') : '<div class="card mut">Todavía no hay versiones subidas.</div>';
+  document.querySelectorAll('[data-fw]').forEach(b => b.onclick = () => fwAccion(b.dataset.fw, b.dataset.v, b.dataset.p));
+}
+
+async function fwAccion(act, ver, placa){
+  const f = firmwares.find(x => x.version === ver && x.placa === placa);
+  if (act === 'publicar') {
+    const conWifi = escaneres.filter(e => (e.placa || 's3lcd') === placa && e.wifi_ssid && !e.fw_objetivo).length;
+    if (!confirm(`¿Publicar v${ver} para ${placaTxt(placa)}?\nSe instala sola en los escáneres de esa placa con WiFi (${conWifi} hoy) en su próximo contacto, y a los demás les aparece el aviso en la app.`)) return;
+    let r = await sb.from('firmware').update({ publicada:false }).eq('publicada', true).eq('placa', placa);
+    if (!r.error) r = await sb.from('firmware').update({ publicada:true }).eq('version', ver).eq('placa', placa);
+    if (r.error) { alert('Error: ' + r.error.message); return; }
+    toast(`v${ver} publicada`);
+  } else if (act === 'despublicar') {
+    if (!confirm(`¿Despublicar v${ver}? Los equipos dejan de recibir actualizaciones automáticas (los ya actualizados no vuelven atrás).`)) return;
+    const r = await sb.from('firmware').update({ publicada:false }).eq('version', ver).eq('placa', placa);
+    if (r.error) { alert('Error: ' + r.error.message); return; }
+    toast('Despublicada');
+  } else if (act === 'borrar') {
+    if (!confirm(`¿Borrar v${ver}? Se elimina el archivo.`)) return;
+    const path = f.url.split('/firmware/').pop();
+    await sb.storage.from('firmware').remove([path]);
+    const r = await sb.from('firmware').delete().eq('version', ver).eq('placa', placa);
+    if (r.error) { alert('Error: ' + r.error.message); return; }
+    toast('Versión borrada');
+  }
+  loadFw();
+}
+
+$('btnFwUp').onclick = async () => {
+  const file = $('fwFile').files[0], ver = $('fwVer').value.trim(), notas = $('fwNotas').value.trim();
+  const err = t => { $('fwErr').textContent = t; };
+  err('');
+  if (!file) return err('Elegí el archivo .bin');
+  if (!/^\d+\.\d+\.\d+$/.test(ver)) return err('La versión tiene que tener el formato 1.0.1');
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  if (bytes[0] !== 0xE9 || bytes.length < 16) return err('El archivo no parece un firmware de ESP32 (debe ser el .ino.bin, no el merged ni el bootloader).');
+  const placa = CHIP_PLACA[bytes[12] | (bytes[13] << 8)];
+  if (!placa) return err('El firmware es para un chip que no usamos (id ' + (bytes[12] | (bytes[13] << 8)) + ').');
+  if (firmwares.some(f => f.version === ver && f.placa === placa)) return err(`La versión ${ver} ya existe para ${placaTxt(placa)}. Subí FW_VERSION en el código.`);
+  if (buf.byteLength > 3 * 1024 * 1024) return err('El archivo supera los 3 MB de la partición.');
+  $('btnFwUp').disabled = true; $('btnFwUp').textContent = 'Subiendo…';
+  try {
+    const sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(b => b.toString(16).padStart(2, '0')).join('');
+    const path = `sunra_scanner_${placa}_v${ver}.bin`;
+    const up = await sb.storage.from('firmware').upload(path, file, { upsert:false, contentType:'application/octet-stream' });
+    if (up.error) throw up.error;
+    const url = sb.storage.from('firmware').getPublicUrl(path).data.publicUrl;
+    const ins = await sb.from('firmware').insert({ placa, version:ver, url, sha256:sha, tamano:buf.byteLength, notas: notas || null });
+    if (ins.error) throw ins.error;
+    toast(`v${ver} para ${placaTxt(placa)} subida. Publicala para que se instale.`);
+    $('fwFile').value = ''; $('fwVer').value = ''; $('fwNotas').value = '';
+    loadFw();
+  } catch (e) { err('Error: ' + e.message); }
+  $('btnFwUp').disabled = false; $('btnFwUp').textContent = 'Subir firmware';
+};
+
+checkSession();
+</script>
+</body>
+</html>

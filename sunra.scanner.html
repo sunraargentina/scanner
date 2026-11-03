@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1418">
+<title>Sunra Scanner</title>
+<style>
+  :root{
+    --bg:#0f1418; --panel:#171e24; --line:#26313a; --txt:#e8eef2; --mut:#8a99a6;
+    --acc:#2fd08a; --warn:#ffb020; --bad:#ff5a5f; --blue:#4aa8ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:40px}
+  header{position:sticky;top:0;z-index:5;background:rgba(15,20,24,.95);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px}
+  header h1{font-size:17px;margin:0;flex:1;letter-spacing:.3px}
+  header h1 small{display:block;font-size:11px;color:var(--mut);font-weight:400}
+  .dot{width:10px;height:10px;border-radius:50%;background:#555}
+  .dot.on{background:var(--acc);box-shadow:0 0 8px var(--acc)}
+  .dot.demo{background:var(--blue)}
+  button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--txt);border-radius:10px;padding:9px 12px}
+  button.pri{background:var(--acc);color:#04210f;border-color:var(--acc);font-weight:600}
+  button:disabled{opacity:.45}
+  main{padding:12px;display:grid;gap:12px;max-width:720px;margin:auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut);margin:0 0 10px;font-weight:600;display:flex;justify-content:space-between}
+  .hero{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center}
+  .ring{--p:0;width:112px;height:112px;border-radius:50%;background:conic-gradient(var(--acc) calc(var(--p)*1%),#25303a 0);display:grid;place-items:center}
+  .ring>div{width:90px;height:90px;border-radius:50%;background:var(--panel);display:grid;place-items:center;text-align:center}
+  .ring b{font-size:28px}.ring span{font-size:11px;color:var(--mut)}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .kv div{background:#121a20;border-radius:10px;padding:8px 10px}
+  .kv label{display:block;font-size:11px;color:var(--mut)}
+  .kv b{font-size:18px;font-variant-numeric:tabular-nums}
+  .kv b small{font-size:12px;color:var(--mut);font-weight:400}
+  .chg{color:var(--acc)} .dsg{color:var(--warn)}
+  .cells{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .cell{background:#121a20;border-radius:8px;padding:6px 6px 5px;position:relative;overflow:hidden;border:1px solid transparent}
+  .cell i{position:absolute;left:0;bottom:0;height:3px;background:var(--blue)}
+  .cell small{color:var(--mut);font-size:10px}
+  .cell b{display:block;font-size:14px;font-variant-numeric:tabular-nums}
+  .cell.max{border-color:var(--acc)} .cell.min{border-color:var(--warn)}
+  .temps{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+  .temps div{background:#121a20;border-radius:10px;padding:8px 4px}
+  .temps label{font-size:11px;color:var(--mut);display:block}
+  .chips{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{font-size:11px;padding:3px 7px;border-radius:20px;background:#121a20;color:#4d5b66;border:1px solid #1d262d}
+  .chip.on{background:rgba(255,90,95,.15);color:var(--bad);border-color:var(--bad)}
+  .chip.al.on{background:rgba(255,176,32,.15);color:var(--warn);border-color:var(--warn)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .mut{color:var(--mut);font-size:12px}
+  pre{white-space:pre-wrap;word-break:break-all;font:11px/1.4 ui-monospace,Consolas,monospace;color:#9fb3c2;margin:6px 0 0;max-height:220px;overflow:auto}
+  #msg{font-size:13px;color:var(--mut);text-align:center}
+  .rec{color:var(--bad)}
+  [hidden]{display:none!important}
+  .field{display:grid;gap:5px;margin-bottom:12px}
+  .field label{font-size:12px;color:var(--mut)}
+  .inrow{display:flex;gap:6px}
+  input{font:16px ui-monospace,Consolas,monospace;letter-spacing:.5px;flex:1;min-width:0;background:#121a20;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px;text-transform:uppercase}
+  input.ok{border-color:var(--acc)} input.err{border-color:var(--bad)}
+  input.plain{text-transform:none;font-family:inherit;letter-spacing:0}
+  .hint{font-size:11px;color:var(--mut);min-height:14px}
+  .hint.err{color:var(--bad)}
+  .big{width:100%;padding:13px;font-size:16px}
+  .net{font-size:12px;padding:6px 10px;border-radius:8px;background:#121a20;margin-bottom:12px}
+  .net.on{color:var(--acc)} .net.off{color:var(--bad)}
+  .hist{width:100%;border-collapse:collapse;font-size:12px}
+  .hist td,.hist th{padding:5px 4px;border-bottom:1px solid var(--line);text-align:left}
+  .hist th{color:var(--mut);font-weight:500}
+  .warnbox{background:rgba(255,176,32,.12);border:1px solid var(--warn);color:var(--warn);border-radius:10px;padding:8px 10px;font-size:13px;margin-top:8px}
+  .unit{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .unit b{font-family:ui-monospace,Consolas,monospace;font-size:13px}
+  .save{font-size:12px} .save.ok{color:var(--acc)} .save.q{color:var(--warn)} .save.err{color:var(--bad)}
+  .wl{display:grid;gap:6px;margin:10px 0}
+  .wl button{display:flex;justify-content:space-between;text-align:left;width:100%}
+  .wl small{color:var(--mut)}
+  #scanner{position:fixed;inset:0;background:#000;z-index:20;display:flex;flex-direction:column}
+  #scanner video{flex:1;width:100%;object-fit:cover}
+  #scanner .bar{padding:14px;display:flex;justify-content:space-between;align-items:center;background:#0f1418}
+  #scanner .frame{position:absolute;left:8%;right:8%;top:38%;height:22%;border:2px solid var(--acc);border-radius:12px;pointer-events:none}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>Sunra Scanner <small id="sub">Desconectado</small></h1>
+  <button id="btnDemo">Demo</button>
+  <button class="pri" id="btnCon">Conectar</button>
+</header>
+
+<main id="startView">
+  <section class="card">
+    <h2>Nueva lectura</h2>
+    <div class="net" id="net">Verificando conexión…</div>
+    <div class="field">
+      <label>Técnico (opcional)</label>
+      <input id="fTec" class="plain" placeholder="Nombre y apellido" autocomplete="name">
+    </div>
+    <div class="field">
+      <label>N° de serie de la batería</label>
+      <div class="inrow"><input id="fSerie" placeholder="XINRIK7220AH50149" autocomplete="off"><button data-scan="fSerie">Escanear</button></div>
+      <div class="hint" id="hSerie"></div>
+    </div>
+    <div class="field">
+      <label>VIN / N° de chasis de la moto (opcional)</label>
+      <div class="inrow"><input id="fVin" placeholder="17 caracteres" maxlength="17" autocomplete="off"><button data-scan="fVin">Escanear</button></div>
+      <div class="hint" id="hVin"></div>
+    </div>
+    <button class="pri big" id="btnStart" disabled>Continuar</button>
+  </section>
+
+  <section class="card" id="histCard" hidden>
+    <h2>Historial de la batería <span id="histN"></span></h2>
+    <div id="histBody"></div>
+  </section>
+</main>
+
+<main id="scanView" hidden>
+  <section class="card">
+    <div class="unit">
+      <div><span class="mut">Batería</span><br><b id="uSerie">—</b><br><span class="mut">VIN</span><br><b id="uVin">—</b><br><span class="mut">Escáner</span><br><b id="uEsc">sin conectar</b><br><span class="mut">WiFi del escáner</span><br><b id="uWifi">—</b></div>
+      <div style="text-align:right">
+        <div class="save" id="saveSt">Sin guardar</div>
+        <div class="row" style="justify-content:flex-end;margin-top:6px">
+          <button id="btnSave" disabled>Guardar lectura</button>
+          <button id="btnBack">Cambiar</button>
+          <button id="btnWifi" disabled>WiFi</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="warnbox" id="authBox" hidden style="text-align:center;font-size:15px"></div>
+
+  <section class="card" id="regCard" hidden style="border-color:var(--acc)">
+    <h2>Primera puesta en marcha del escáner</h2>
+    <p class="mut" style="margin:0 0 12px">Este escáner todavía no está asignado. Los datos se cargan una sola vez y el equipo queda asociado a este concesionario.</p>
+    <div class="field">
+      <label>N° de cliente del concesionario</label>
+      <input id="fCli" placeholder="Ej. 1024" maxlength="20" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Razón social</label>
+      <input id="fCliNom" class="plain" placeholder="Ej. Motos del Sur S.R.L." maxlength="80">
+      <div class="hint" id="hReg"></div>
+    </div>
+    <button class="pri big" id="btnReg" disabled>Asociar escáner a este concesionario</button>
+  </section>
+
+  <section class="card" id="wifiAsk" hidden style="border-color:var(--blue)">
+    <h2>WiFi del escáner (opcional)</h2>
+    <p class="mut" style="margin:0 0 12px">¿Querés conectar el escáner al WiFi del local? Así las lecturas se suben directo desde el equipo y recibe actualizaciones automáticas. Si no, todo funciona igual con el internet del celular.</p>
+    <div class="row"><button class="pri" id="btnWifiSi">Sí, configurar WiFi</button><button id="btnWifiNo">Ahora no</button></div>
+  </section>
+
+  <section class="card" id="wifiCard" hidden style="border-color:var(--blue)">
+    <h2>WiFi del escáner <span id="wifiSt"></span></h2>
+    <div class="row"><button id="btnScanWifi">Buscar redes</button><button id="btnForget">Olvidar red</button><button id="btnWifiClose">Cerrar</button></div>
+    <div class="card" style="background:#121a20;margin-top:10px;padding:10px">
+      <b style="font-size:14px">Cargar con el QR del WiFi</b>
+      <p class="mut" style="margin:4px 0 8px">En Android: <b>Ajustes → WiFi →</b> tocá la red conectada → <b>Compartir</b>. Sacá una captura de ese QR y elegila acá, o escaneá el QR de otro celular o del router.</p>
+      <div class="row">
+        <button class="pri" id="btnQrFoto">Desde captura de pantalla</button>
+        <button id="btnQrCam">Con la cámara</button>
+        <input type="file" id="fQrImg" accept="image/*" hidden>
+      </div>
+    </div>
+    <div class="wl" id="wifiList"></div>
+    <div class="field">
+      <label>Red (nombre)</label>
+      <input id="fSsid" class="plain" maxlength="32" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Clave</label>
+      <div class="inrow"><input id="fWpass" class="plain" type="password" maxlength="64" autocomplete="off"><button id="btnShowPw">Ver</button></div>
+      <div class="hint" id="hWifi"></div>
+    </div>
+    <button class="pri big" id="btnWifiSave">Guardar y conectar</button>
+  </section>
+
+  <section class="card" id="bloqCard" hidden style="border-color:var(--bad)">
+    <h2 style="color:var(--bad)">Escáner bloqueado</h2>
+    <p style="margin:0 0 10px">Este escáner fue bloqueado por Sunra Argentina y no puede leer ni guardar información. Comunicate con Sunra para que lo habiliten:</p>
+    <div class="row" id="contactRow"></div>
+    <p class="mut" style="margin:12px 0 8px">Si el escáner no está conectado a WiFi, conectalo: así recibe la habilitación apenas Sunra lo autorice. También se habilita al volver a conectarlo desde esta app.</p>
+    <button id="btnWifiBloq">Conectar el escáner al WiFi</button>
+  </section>
+
+  <section class="card" id="updCard" hidden style="border-color:var(--yel,#f5c400)">
+    <h2>Actualización disponible <span id="updVer"></span></h2>
+    <p style="margin:0 0 6px" id="updTxt"></p>
+    <p class="mut" style="margin:0 0 10px" id="updNotas"></p>
+    <div class="row" id="updBtns">
+      <button class="pri" id="btnUpdWifi">Conectar al WiFi</button>
+      <button id="btnUpdCel">Actualizar con datos del celular</button>
+      <button id="btnUpdNo">Más tarde</button>
+    </div>
+    <div id="updProg" hidden style="margin-top:10px">
+      <div style="height:10px;background:#121a20;border-radius:6px;overflow:hidden"><div id="updBar" style="height:100%;width:0;background:var(--acc)"></div></div>
+      <div class="mut" id="updMsg" style="margin-top:6px"></div>
+    </div>
+  </section>
+
+  <div id="dataArea" style="display:grid;gap:12px">
+  <div id="msg">Tocá <b>Conectar</b> y elegí <b>SUNRA-SCAN-…</b>. Necesita Chrome en Android con Bluetooth y ubicación activados.</div>
+
+  <section class="card">
+    <h2>Batería <span id="upd">—</span></h2>
+    <div class="hero">
+      <div class="ring" id="ring"><div><span>SOC</span><b id="soc">--</b><span id="socTxt">%</span></div></div>
+      <div class="kv">
+        <div><label>Voltaje</label><b id="v">--</b></div>
+        <div><label>Corriente</label><b id="i">--</b></div>
+        <div><label>Restante / Total</label><b id="rm">--</b></div>
+        <div><label>SOH</label><b id="soh">--</b></div>
+      </div>
+    </div>
+    <div class="kv" style="margin-top:8px;grid-template-columns:repeat(4,1fr)">
+      <div><label>Ciclos</label><b id="cyc">--</b></div>
+      <div><label>Dif. celdas</label><b id="vd">--</b></div>
+      <div><label>FW</label><b id="fw">--</b></div>
+      <div><label>Humedad</label><b id="hum">--</b></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Temperaturas</h2>
+    <div class="temps">
+      <div><label>NTC1</label><b id="t0">--</b></div>
+      <div><label>NTC2</label><b id="t1">--</b></div>
+      <div><label>Aire</label><b id="t2">--</b></div>
+      <div><label>FET</label><b id="t3">--</b></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Celdas <span id="cellInfo"></span></h2>
+    <div class="cells" id="cells"></div>
+  </section>
+
+  <section class="card">
+    <h2>Protecciones <span id="protHex"></span></h2>
+    <div class="chips" id="prot"></div>
+    <h2 style="margin-top:14px">Alarmas <span id="alHex"></span></h2>
+    <div class="chips" id="alarm"></div>
+    <p class="mut" style="margin:10px 0 0">Estado batería: <b id="bst">--</b> · Bytes 62–66: <b id="bal">--</b> · Byte 81: <b id="b81">--</b></p>
+  </section>
+
+  <section class="card">
+    <h2>Registro y extras</h2>
+    <div class="row">
+      <button id="btnRec">● Grabar</button>
+      <button id="btnCsv" disabled>Descargar CSV</button>
+      <span class="mut" id="recN"></span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="btnC2" disabled>Leer CMD 02</button>
+      <button id="btnC3" disabled>Leer CMD 03</button>
+      <button id="btnRaw">Ver tramas</button>
+    </div>
+    <pre id="raw" hidden></pre>
+  </section>
+  </div>
+</main>
+
+<div id="scanner" hidden>
+  <video id="video" playsinline muted></video>
+  <div class="frame"></div>
+  <div class="bar"><span class="mut" id="scanMsg">Apuntá al código de barras</span><button id="btnScanClose">Cerrar</button></div>
+</div>
+
+<script>
+// ================= CONFIGURACION SUPABASE (completar) =================
+const SUPABASE_URL = 'https://tiwryaujnlvjburzfmqq.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpd3J5YXVqbmx2amJ1cnpmbXFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2NjM4MTAsImV4cCI6MjEwOTIzOTgxMH0.RPZumfRs6J05b8CedtR8RR2oi1a3RNdiTagpHxBp2qU';
+// =====================================================================
+
+// Contacto que se muestra cuando un escaner esta bloqueado (completar)
+const CONTACTO = { telefono: '', whatsapp: '', email: 'garantia@sunra.com.ar' };
+
+const SVC = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const RX  = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+const TX  = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+// Orden tomado de BMS_Studio (fila por fila). Posicion de bits PROVISORIA salvo bit0 (CellOV) y alarma bit2 (PackOV)
+const PROT = ['CellOV','CellUV','PackOV','PackUV','ChgOC','DsgOC','SC','Open','Imbalance','SC_Lock','RV','FET OT',
+  'ChgUT','DsgOT','DsgUT','ChgOT','ChgAirOT','ChgAirUT','DsgAirOT','AFE_Fail','ChgTimeout','DsgOcLock','ChgMOSFail',
+  'OSC_Fail','DsgMOSFail','DsgAirUT','NTC_OW/SC'];
+const ALARM = ['CellOV','CellUV','PackOV','PackUV','Imbalance','LowSOC','ChgOC','DsgOC','ChgOT','ChgUT','DsgOT',
+  'DsgUT','DsgAirOT','DsgAirUT','ChgAirOT','ChgAirUT','FET OT'];
+
+const DEMO = [
+ '1426102510281025102710261024102710261023101810181019101a10121017101510121016101510027a0b760b7d0b7e0b3b200000639a078a070d00e000000000000100000000000400000061f2034440',
+ '14d50ece0ecc0eca0ec70ed00ecc0ecd0ecb0edc0ec90ec30ecd0ec30ece0ecd0ece0ece0ed00ebf0e02790b780b7e0b800b981de90336d007410407008000000000000000000000000000000064f2034473'
+];
+
+const $ = id => document.getElementById(id);
+let dev, rxChar, demoTimer = null, rec = null, rxBuf = [];
+
+// ---------- decodificacion (ver bms_poll_esp32.ino) ----------
+function decode(d){
+  if (d.length < 82) return null;
+  const u16 = i => d[i] | d[i+1] << 8;
+  const s16 = i => { const v = u16(i); return v & 0x8000 ? v - 0x10000 : v; };
+  const u32 = i => (u16(i) | u16(i+2) << 16) >>> 0;
+  const n = d[0];
+  const cells = []; for (let k=0;k<n;k++) cells.push(u16(1+2*k));
+  const T = i => (u16(i) - 2731) / 10;
+  return {
+    cells, t:[T(42),T(44),T(46),T(48)],
+    v: u16(50)/100, i: s16(52)/100, soc: d[54],
+    fcc: u16(55)*10, rm: u16(57)*10, cyc: u16(59),
+    bst: d[61], bal: Array.from(d.slice(62,67)),
+    prot: u32(67), alarm: u32(73),
+    soh: d[77], hum: u16(78)/10, fw: d[80], b81: d[81]
+  };
+}
+
+const hex = a => Array.from(a, b => b.toString(16).padStart(2,'0')).join(' ').toUpperCase();
+
+function render(x){
+  $('msg').hidden = true;
+  $('upd').textContent = new Date().toLocaleTimeString();
+  $('ring').style.setProperty('--p', x.soc);
+  $('soc').textContent = x.soc;
+  $('v').innerHTML = x.v.toFixed(2) + ' <small>V</small>';
+  const st = x.i > 0.05 ? ['chg','cargando'] : x.i < -0.05 ? ['dsg','descargando'] : ['','reposo'];
+  $('i').innerHTML = `<span class="${st[0]}">${x.i.toFixed(2)}</span> <small>A · ${st[1]}</small>`;
+  $('socTxt').textContent = '% ' + st[1];
+  $('rm').innerHTML = (x.rm/1000).toFixed(2) + ' <small>/ ' + (x.fcc/1000).toFixed(2) + ' Ah</small>';
+  $('soh').innerHTML = x.soh + ' <small>%</small>';
+  $('cyc').textContent = x.cyc;
+  $('fw').textContent = x.fw.toString(16).toUpperCase();
+  $('hum').textContent = x.hum.toFixed(1);
+  x.t.forEach((t,k) => $('t'+k).textContent = t.toFixed(1) + '°');
+
+  const mx = Math.max(...x.cells), mn = Math.min(...x.cells);
+  $('vd').innerHTML = (mx-mn) + ' <small>mV</small>';
+  const avg = x.cells.reduce((a,b)=>a+b,0)/x.cells.length;
+  $('cellInfo').textContent = `máx ${mx} · mín ${mn} · prom ${avg.toFixed(0)} mV`;
+  $('cells').innerHTML = x.cells.map((c,k) => {
+    const pct = Math.max(0, Math.min(100, (c-3000)/(4200-3000)*100));
+    const cls = c===mx ? 'max' : c===mn ? 'min' : '';
+    return `<div class="cell ${cls}"><small>${k+1}</small><b>${c}</b><i style="width:${pct}%"></i></div>`;
+  }).join('');
+
+  $('prot').innerHTML = PROT.map((n,b) => `<span class="chip ${x.prot>>>b & 1 ? 'on':''}">${n}</span>`).join('');
+  $('alarm').innerHTML = ALARM.map((n,b) => `<span class="chip al ${x.alarm>>>b & 1 ? 'on':''}">${n}</span>`).join('');
+  $('protHex').textContent = '0x' + x.prot.toString(16).toUpperCase();
+  $('alHex').textContent = '0x' + x.alarm.toString(16).toUpperCase();
+  $('bst').textContent = '0x' + x.bst.toString(16).toUpperCase().padStart(2,'0');
+  $('bal').textContent = hex(x.bal);
+  $('b81').textContent = '0x' + x.b81.toString(16).toUpperCase().padStart(2,'0');
+
+  if (rec) {
+    const now = new Date();
+    rec.push([now.toLocaleDateString('sv'), now.toLocaleTimeString('sv'), x.i.toFixed(2), x.v.toFixed(2),
+      ...x.cells.map(c => (c/1000).toFixed(3)), x.soc, x.rm, x.fcc, x.cyc,
+      ...x.t.map(t => t.toFixed(1)), x.soh, x.prot.toString(16), x.alarm.toString(16), x.bst.toString(16)]);
+    $('recN').textContent = rec.length + ' filas';
+  }
+}
+
+function logRaw(line){
+  const p = $('raw');
+  p.textContent = (new Date().toLocaleTimeString() + '  ' + line + '\n' + p.textContent).slice(0, 8000);
+}
+
+// Paquete del ESP32: [CMD][LEN][DATOS] o [EE][CMD] (sin respuesta). Se rearma si llega partido.
+function onPacket(bytes){
+  rxBuf.push(...bytes);
+  while (rxBuf.length >= 2) {
+    if (rxBuf[0] === 0xEE) { logRaw('CMD ' + rxBuf[1].toString(16) + ': el BMS no respondió'); $('sub').textContent = 'Conectado · BMS sin respuesta'; rxBuf = rxBuf.slice(2); continue; }
+    const need = 2 + rxBuf[1];
+    if (rxBuf.length < need) return;
+    const cmd = rxBuf[0], data = Uint8Array.from(rxBuf.slice(2, need));
+    rxBuf = rxBuf.slice(need);
+    if ((cmd >= 0xA0 && cmd <= 0xA9) || cmd === 0xEB) { onAuthPacket(cmd, new TextDecoder().decode(data)); continue; }
+    logRaw('CMD ' + cmd.toString(16).padStart(2,'0') + ' [' + data.length + '] ' + hex(data));
+    if (cmd === 1) { const x = decode(data); if (x) { render(x); onReading(x, data); if (dev && dev.gatt.connected) $('sub').textContent = 'Conectado · ' + dev.name; } }
+  }
+}
+
+// ---------- Bluetooth ----------
+async function connect(){
+  if (!navigator.bluetooth) { alert('Este navegador no soporta Web Bluetooth. Usá Chrome en Android.'); return; }
+  try {
+    stopDemo();
+    dev = await navigator.bluetooth.requestDevice({ filters:[{ namePrefix:'SUNRA' }], optionalServices:[SVC] });
+    dev.addEventListener('gattserverdisconnected', onDisc);
+    $('sub').textContent = 'Conectando…';
+    const srv = await dev.gatt.connect();
+    const svc = await srv.getPrimaryService(SVC);
+    rxChar = await svc.getCharacteristic(RX);
+    const tx = await svc.getCharacteristic(TX);
+    await tx.startNotifications();
+    tx.addEventListener('characteristicvaluechanged', e => onPacket(new Uint8Array(e.target.value.buffer)));
+    rxBuf = [];
+    $('dot').className = 'dot on';
+    $('sub').textContent = 'Conectado · ' + dev.name;
+    $('btnCon').textContent = 'Desconectar';
+    $('btnC2').disabled = $('btnC3').disabled = false;
+    await bleWrite(Uint8Array.of(0xA0));          // pedir ID del escaner para autorizarlo
+  } catch (e) {
+    $('sub').textContent = 'Error: ' + e.message;
+  }
+}
+function onDisc(){
+  $('dot').className = 'dot';
+  $('sub').textContent = 'Desconectado';
+  $('btnCon').textContent = 'Conectar';
+  $('btnC2').disabled = $('btnC3').disabled = true;
+  rxChar = null;
+}
+async function bleWrite(bytes){
+  if (!rxChar) return;
+  if (rxChar.writeValueWithResponse) await rxChar.writeValueWithResponse(bytes); else await rxChar.writeValue(bytes);
+}
+async function sendCmd(c){ await bleWrite(Uint8Array.of(c)); }
+
+// ---------- demo ----------
+function stopDemo(){ if (demoTimer) { clearInterval(demoTimer); demoTimer = null; $('btnDemo').textContent = 'Demo'; } }
+function startDemo(){
+  if (esc && esc.blocked) return;
+  let k = 0;
+  const tick = () => {
+    const b = DEMO[k++ % DEMO.length].match(/../g).map(h => parseInt(h,16));
+    onPacket([1, b.length, ...b]);
+  };
+  tick(); demoTimer = setInterval(tick, 2000);
+  $('dot').className = 'dot demo'; $('sub').textContent = 'Modo demo (datos de la captura)';
+  $('btnDemo').textContent = 'Parar demo';
+}
+
+$('btnCon').onclick = () => dev && dev.gatt.connected ? dev.gatt.disconnect() : connect();
+$('btnDemo').onclick = () => { if (demoTimer) { stopDemo(); $('dot').className='dot'; $('sub').textContent='Desconectado'; } else startDemo(); };
+$('btnC2').onclick = () => sendCmd(2);
+$('btnC3').onclick = () => sendCmd(3);
+$('btnRaw').onclick = () => { $('raw').hidden = !$('raw').hidden; };
+$('btnRec').onclick = () => {
+  if (rec) { $('btnRec').textContent = '● Grabar'; $('btnRec').classList.remove('rec'); $('btnCsv').disabled = !rec.length; return void (rec.stopped = true, recDone = rec, rec = null); }
+  rec = []; recDone = null; $('btnRec').textContent = '■ Detener'; $('btnRec').classList.add('rec'); $('btnCsv').disabled = true; $('recN').textContent = '0 filas';
+};
+let recDone = null;
+$('btnCsv').onclick = () => {
+  if (!recDone) return;
+  const head = ['Fecha','Hora','Corriente','Voltaje', ...Array.from({length:20},(_,k)=>'Cell'+(k+1)),
+    'SOC','RM','FCC','Ciclos','NTC1','NTC2','Aire','FET','SOH','Protect','Alarm','BatteryStatus'];
+  const csv = [head, ...recDone].map(r => r.join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'bms-' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.csv';
+  a.click();
+};
+
+// ================= Base de datos (Supabase REST) =================
+const DB_OK = !SUPABASE_URL.includes('TU-PROYECTO');
+const H = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' };
+const LS = { get:(k,d)=>{ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+             set:(k,v)=>{ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+
+async function dbPing(){
+  if (!DB_OK) return false;
+  try { const r = await fetch(SUPABASE_URL + '/rest/v1/lecturas?select=id&limit=1', { headers:H, cache:'no-store' }); return r.ok; }
+  catch { return false; }
+}
+async function dbInsert(row){
+  const r = await fetch(SUPABASE_URL + '/rest/v1/lecturas?on_conflict=lectura_uid', { method:'POST',
+    headers:{ ...H, Prefer:'return=minimal,resolution=ignore-duplicates' }, body:JSON.stringify(row) });
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()).slice(0,120));
+}
+async function dbHistory(serie){
+  const q = '/rest/v1/lecturas?select=creado,vin,tecnico,soc,soh,ciclos,celda_dif&serie_bateria=eq.' +
+            encodeURIComponent(serie) + '&order=creado.desc&limit=10';
+  const r = await fetch(SUPABASE_URL + q, { headers:H });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+// Cola offline: si no hay internet al guardar, queda en el celular y se sube despues
+async function flushQueue(){
+  const q = LS.get('cola', []);
+  if (!q.length || !navigator.onLine || !DB_OK) return;
+  const rest = [];
+  for (const row of q) { try { await dbInsert(row); } catch { rest.push(row); } }
+  LS.set('cola', rest);
+  if (rest.length < q.length && !rest.length) setSave('ok', 'Guardado ✓ (cola enviada)');
+}
+window.addEventListener('online', () => { updateNet(); flushQueue(); });
+window.addEventListener('offline', updateNet);
+setInterval(flushQueue, 30000);
+
+// ================= Pantalla de inicio =================
+const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/;
+let session = null, lastX = null, lastRaw = null, savedThisConn = false, online = false;
+
+$('fTec').value = LS.get('tecnico', '');
+
+
+async function updateNet(){
+  const n = $('net');
+  if (!DB_OK) { online = false; n.className = 'net off'; n.textContent = 'Falta configurar la base de datos (SUPABASE_URL / KEY)'; return validate(); }
+  online = navigator.onLine && await dbPing();
+  n.className = 'net ' + (online ? 'on' : 'off');
+  n.textContent = online ? '● Conectado a internet y a la base de datos' : '● Sin conexión — se necesita internet para continuar';
+  validate();
+}
+
+function validate(){
+  const serie = $('fSerie').value.trim().toUpperCase();
+  const vin = $('fVin').value.trim().toUpperCase();
+  const vOk = !vin || VIN_RE.test(vin), sOk = serie.length >= 6, tOk = true;   // VIN opcional, pero si se carga tiene que ser valido
+  $('fVin').className = vin ? (vOk ? 'ok' : 'err') : '';
+  $('hVin').className = 'hint' + (vin && !vOk ? ' err' : '');
+  $('hVin').textContent = !vin ? 'Opcional' : vOk ? 'VIN válido' : `Debe tener 17 caracteres (tiene ${vin.length}); no se usan I, O ni Q`;
+  $('fSerie').className = serie ? (sOk ? 'ok' : 'err') : '';
+  $('hSerie').textContent = serie ? '' : 'Obligatorio · está en la etiqueta con código de barras';
+  $('btnStart').disabled = !(vOk && sOk && tOk && online);
+}
+['fSerie','fVin'].forEach(id => $(id).addEventListener('input', validate));
+
+let histTimer;
+$('fSerie').addEventListener('input', () => { clearTimeout(histTimer); histTimer = setTimeout(loadHistory, 600); });
+
+async function loadHistory(){
+  const serie = $('fSerie').value.trim().toUpperCase();
+  const card = $('histCard');
+  if (serie.length < 6 || !online) { card.hidden = true; return; }
+  try {
+    const rows = await dbHistory(serie);
+    card.hidden = false;
+    $('histN').textContent = rows.length ? rows.length + (rows.length === 10 ? '+' : '') + ' lecturas' : '';
+    if (!rows.length) { $('histBody').innerHTML = '<p class="mut" style="margin:0">Batería nueva: no tiene lecturas anteriores.</p>'; return; }
+    const last = rows[0];
+    let html = `<p style="margin:0 0 8px">Último registro: ${last.vin ? `moto <b style="font-family:monospace">${last.vin}</b>` : 'sin VIN cargado'}</p>`;
+    const vin = $('fVin').value.trim().toUpperCase();
+    if (VIN_RE.test(vin) && last.vin && vin !== last.vin) html += `<div class="warnbox">Esta batería figuraba en otra moto (${last.vin}). Si la cambiaron, se registra el nuevo VIN.</div>`;
+    html += '<table class="hist" style="margin-top:8px"><tr><th>Fecha</th><th>VIN</th><th>SOH</th><th>Ciclos</th><th>Dif</th></tr>' +
+      rows.map(r => `<tr><td>${new Date(r.creado).toLocaleDateString()}</td><td>${r.vin ? '…' + r.vin.slice(-6) : '—'}</td><td>${r.soh ?? '-'}%</td><td>${r.ciclos ?? '-'}</td><td>${r.celda_dif ?? '-'}</td></tr>`).join('') + '</table>';
+    $('histBody').innerHTML = html;
+  } catch (e) { card.hidden = false; $('histBody').innerHTML = '<p class="hint err">No se pudo leer el historial: ' + e.message + '</p>'; }
+}
+$('fVin').addEventListener('input', () => { if (VIN_RE.test($('fVin').value.trim().toUpperCase())) loadHistory(); });
+
+function showView(scan){
+  $('startView').hidden = scan; $('scanView').hidden = !scan;
+  $('btnCon').hidden = $('btnDemo').hidden = !scan;
+  window.scrollTo(0,0);
+}
+
+$('btnStart').onclick = () => {
+  session = { cliente: null, clienteNombre: null,
+              tecnico: $('fTec').value.trim(), serie: $('fSerie').value.trim().toUpperCase(), vin: $('fVin').value.trim().toUpperCase() };
+  LS.set('tecnico', session.tecnico);
+  $('uSerie').textContent = session.serie; $('uVin').textContent = session.vin || '— (sin cargar)';
+  savedThisConn = false; setSave('', 'Conectá el escáner para leer');
+  showView(true);
+};
+$('btnBack').onclick = () => {
+  if (dev && dev.gatt.connected) dev.gatt.disconnect();
+  stopDemo(); $('dot').className = 'dot'; $('sub').textContent = 'Desconectado';
+  $('fSerie').value = ''; $('fVin').value = ''; $('histCard').hidden = true;
+  session = null; lastX = null; validate(); showView(false);
+};
+
+// ================= Guardado de lecturas =================
+function setSave(cls, txt){ const s = $('saveSt'); s.className = 'save ' + cls; s.textContent = txt; }
+
+function buildRow(x, raw){
+  const mx = Math.max(...x.cells), mn = Math.min(...x.cells);
+  return {
+    escaner_id: esc.id, cliente: session.cliente, cliente_nombre: session.clienteNombre,
+    serie_bateria: session.serie, vin: session.vin || null, tecnico: session.tecnico || null,
+    leido_en: new Date().toISOString(),
+    voltaje: x.v, corriente: x.i, soc: x.soc, soh: x.soh, ciclos: x.cyc,
+    rm_mah: x.rm, fcc_mah: x.fcc, celda_max: mx, celda_min: mn, celda_dif: mx - mn,
+    celdas: x.cells, temps: x.t, protect: x.prot, alarm: x.alarm, estado: x.bst, fw: x.fw,
+    raw: hex(raw).replace(/ /g,'')
+  };
+}
+
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() :
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c === 'x' ? r : (r&3|8)).toString(16); }));
+
+async function saveReading(){
+  if (!session || !lastX || !DB_OK || !esc.ok) return;
+  const row = buildRow(lastX, lastRaw);
+  row.lectura_uid = uuid(); row.origen = 'app';
+  // 1) Si el escaner tiene WiFi en linea, sube el directo. 2) Si falla, sube la app (sin duplicar: mismo lectura_uid)
+  if (esc.wifi === 3) {
+    setSave('', 'Enviando por WiFi del escáner…');
+    const r = await escUpload(row);
+    if (r.ok) { setSave('ok', 'Guardado ✓ por WiFi del escáner ' + new Date().toLocaleTimeString()); return; }
+    logRaw('Subida por WiFi del escáner falló (' + r.msg + '): se sube con el celular');
+  }
+  setSave('', 'Guardando…');
+  try { await dbInsert(row); setSave('ok', 'Guardado ✓ ' + new Date().toLocaleTimeString()); }
+  catch (e) {
+    const q = LS.get('cola', []); q.push(row); LS.set('cola', q);
+    setSave('q', 'Sin conexión: guardado en el celular, se sube solo (' + q.length + ')');
+  }
+}
+
+// Se llama con cada lectura del BMS. Guarda automaticamente la primera de cada conexion.
+function onReading(x, raw){
+  lastX = x; lastRaw = raw;
+  const real = dev && dev.gatt && dev.gatt.connected && esc.ok;
+  $('btnSave').disabled = !real;
+  if (real && !savedThisConn) { savedThisConn = true; saveReading(); }
+  if (!real && !$('saveSt').textContent.startsWith('Guardado')) setSave('', 'Modo demo: no se guarda');
+}
+$('btnSave').onclick = saveReading;
+
+// cada nueva conexion BLE vuelve a guardar automaticamente
+const _connect = connect;
+connect = async () => { savedThisConn = false; esc = { id:null, ok:false, wifi:0 }; setBlocked(false); $('updCard').hidden = true; $('updProg').hidden = true; $('updBtns').hidden = false; upd = null; showAuth(''); $('regCard').hidden = true; $('wifiAsk').hidden = true; $('wifiCard').hidden = true; renderWifi(); $('uEsc').textContent = 'conectando…'; await _connect(); };
+
+// ================= Vinculacion / bloqueo del escaner =================
+let esc = { id:null, ok:false };
+function showAuth(txt, bad){ const b = $('authBox'); b.hidden = !txt; b.textContent = txt;
+  b.style.color = bad ? 'var(--bad)' : 'var(--warn)'; b.style.borderColor = bad ? 'var(--bad)' : 'var(--warn)'; }
+
+async function authorize(cli, nom){
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/autorizar_escaner', { method:'POST', headers:H,
+      body: JSON.stringify({ p_id:esc.id, p_challenge:esc.challenge, p_cliente:cli, p_nombre:nom }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const a = await r.json();
+    if (a.accion === 'R') {                                // escaner sin asignar: pedir datos una sola vez
+      showAuth(''); $('regCard').hidden = false; $('uEsc').textContent = esc.id + ' · sin asignar';
+      setSave('', 'Falta asignar el escáner'); return;
+    }
+    $('regCard').hidden = true;
+    if (a.cliente) { session.cliente = a.cliente; session.clienteNombre = a.nombre; }
+    await bleWrite(Uint8Array.from([0xA1, ...new TextEncoder().encode(a.accion + '|' + a.cliente + '|' + a.firma)]));
+  } catch (e) { showAuth('No se pudo verificar el escáner (' + e.message + '). Se necesita internet.', true); }
+}
+
+function validateReg(){
+  const cli = $('fCli').value.trim(), nom = $('fCliNom').value.trim();
+  $('btnReg').disabled = !(cli.length >= 1 && nom.length >= 2);
+  $('hReg').textContent = 'Revisá bien los datos: después solo Sunra los puede cambiar.';
+}
+['fCli','fCliNom'].forEach(id => $(id).addEventListener('input', validateReg));
+$('btnReg').onclick = () => {
+  const cli = $('fCli').value.trim().toUpperCase(), nom = $('fCliNom').value.trim();
+  if (!confirm(`¿Asociar este escáner a:\n${nom}\nCliente N° ${cli}?`)) return;
+  $('btnReg').disabled = true; authorize(cli, nom);
+};
+
+// ================= WiFi del escaner =================
+function wifiTxt(){
+  const s = esc.ssid || '';
+  return ['No configurado', `${s} · sin conexión`, `${s} · conectando…`, `${s} · en línea ✓${esc.ip ? ' (' + esc.ip + ')' : ''}`][esc.wifi || 0];
+}
+function renderWifi(){
+  $('uWifi').textContent = esc.id ? wifiTxt() : '—';
+  $('wifiSt').textContent = esc.id ? wifiTxt() : '';
+  $('btnWifi').disabled = !(esc.ok || esc.blocked);
+}
+function maybeAskWifi(){
+  if (!esc.ok || esc.wifi) return;
+  if (LS.get('wifiNo:' + esc.id, false)) return;
+  $('wifiAsk').hidden = false;
+}
+$('btnWifiNo').onclick = () => { LS.set('wifiNo:' + esc.id, true); $('wifiAsk').hidden = true; };
+$('btnWifiSi').onclick = () => { $('wifiAsk').hidden = true; openWifi(); };
+$('btnWifi').onclick = openWifi;
+$('btnWifiClose').onclick = () => { $('wifiCard').hidden = true; };
+function openWifi(){
+  $('wifiCard').hidden = false; $('fSsid').value = esc.ssid || ''; $('fWpass').value = '';
+  $('hWifi').textContent = ''; renderWifi(); $('wifiCard').scrollIntoView({ behavior:'smooth' });
+  scanWifi();
+}
+let scanAcc = [];
+function scanWifi(){ scanAcc = []; $('wifiList').innerHTML = '<span class="mut">Buscando redes…</span>'; bleWrite(Uint8Array.of(0xA6)); }
+$('btnScanWifi').onclick = scanWifi;
+$('btnShowPw').onclick = () => { const f = $('fWpass'); f.type = f.type === 'password' ? 'text' : 'password'; };
+$('btnForget').onclick = () => {
+  if (!confirm('¿Olvidar la red WiFi del escáner? Va a seguir funcionando por Bluetooth y el internet del celular.')) return;
+  bleWrite(Uint8Array.of(0xA4));
+};
+$('btnWifiSave').onclick = () => {
+  const ss = $('fSsid').value.replace(/[\t\n]/g, ''), pw = $('fWpass').value.replace(/[\t\n]/g, '');
+  if (!ss) { $('hWifi').className = 'hint err'; $('hWifi').textContent = 'Elegí o escribí el nombre de la red'; return; }
+  $('hWifi').className = 'hint'; $('hWifi').textContent = 'Enviando al escáner…';
+  bleWrite(Uint8Array.from([0xA2, ...new TextEncoder().encode(ss + '\t' + pw)]));
+};
+function renderScan(){
+  const seen = new Map();
+  scanAcc.forEach(l => { const [ss, rssi, lock] = l.split('\t'); if (ss && (!seen.has(ss) || +rssi > seen.get(ss).rssi)) seen.set(ss, { rssi:+rssi, lock: lock === '1' }); });
+  const list = [...seen.entries()].sort((a, b) => b[1].rssi - a[1].rssi);
+  const bars = r => r > -55 ? '▂▄▆█' : r > -67 ? '▂▄▆' : r > -78 ? '▂▄' : '▂';
+  $('wifiList').innerHTML = list.length ? list.map(([ss, v]) =>
+    `<button data-ssid="${esc_(ss)}"><span>${esc_(ss)} ${v.lock ? '🔒' : ''}</span><small>${bars(v.rssi)}</small></button>`).join('')
+    : '<span class="mut">No se encontraron redes. Acercá el escáner al router y buscá de nuevo.</span>';
+  document.querySelectorAll('[data-ssid]').forEach(b => b.onclick = () => { $('fSsid').value = b.dataset.ssid; $('fWpass').focus(); });
+}
+const esc_ = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Subida de una lectura por el WiFi del escaner (espera la respuesta hasta 15 s)
+const upWait = new Map();
+function escUpload(row){
+  return new Promise(res => {
+    const t = setTimeout(() => { upWait.delete(row.lectura_uid); res({ ok:false, msg:'sin respuesta' }); }, 15000);
+    upWait.set(row.lectura_uid, r => { clearTimeout(t); res(r); });
+    const clean = s => String(s || '').replace(/[\t\n]/g, ' ');
+    bleWrite(Uint8Array.from([0xA5, ...new TextEncoder().encode([row.lectura_uid, clean(row.serie_bateria), clean(row.vin), clean(row.tecnico)].join('\t'))]))
+      .catch(e => { clearTimeout(t); upWait.delete(row.lectura_uid); res({ ok:false, msg:e.message }); });
+  });
+}
+
+// ================= Bloqueo =================
+function setBlocked(b){
+  esc.blocked = b;
+  $('bloqCard').hidden = !b; $('dataArea').hidden = b;
+  if (b) { $('updCard').hidden = true; $('wifiAsk').hidden = true; $('btnSave').disabled = true; renderContact(); }
+  renderWifi();
+}
+function renderContact(){
+  const c = [];
+  if (CONTACTO.telefono) c.push(`<a href="tel:${esc_(CONTACTO.telefono)}"><button>Llamar</button></a>`);
+  if (CONTACTO.whatsapp) c.push(`<a href="https://wa.me/${esc_(CONTACTO.whatsapp.replace(/\D/g,''))}?text=${encodeURIComponent('Hola, el escáner ' + (esc.id || '') + ' está bloqueado. Cliente N° ' + (session?.cliente || ''))}" target="_blank"><button class="ok">WhatsApp</button></a>`);
+  if (CONTACTO.email) c.push(`<a href="mailto:${esc_(CONTACTO.email)}?subject=${encodeURIComponent('Escáner bloqueado ' + (esc.id || ''))}&body=${encodeURIComponent('El escáner ' + (esc.id || '') + ' figura bloqueado. Solicito su revisión.')}"><button>Email</button></a>`);
+  $('contactRow').innerHTML = c.join('') + `<span class="mut" style="width:100%">ID del escáner: <b class="mono">${esc_(esc.id || '—')}</b></span>`;
+}
+$('btnWifiBloq').onclick = () => openWifi();
+
+// ================= Aviso de actualizacion =================
+let upd = null;
+async function rpcFirmware(challenge){
+  const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/firmware_para_escaner', { method:'POST', headers:H,
+    body: JSON.stringify({ p_id: esc.id, p_challenge: challenge, p_fw: esc.fw || '', p_placa: esc.placa || 's3lcd' }) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function checkUpdate(){
+  try {
+    const a = await rpcFirmware('0000000000000000');
+    if (!a.version) return;
+    upd = a;
+    $('updVer').textContent = 'v' + a.version;
+    $('updNotas').textContent = a.notas ? 'Novedades: ' + a.notas : '';
+    showUpdText();
+    $('updCard').hidden = false;
+  } catch {}
+}
+function showUpdText(){
+  if (!upd) return;
+  const mb = upd.tamano ? (upd.tamano / 1048576).toFixed(1) + ' MB' : '1-2 MB';
+  if (esc.wifi === 3) {
+    $('updTxt').textContent = `El escáner está conectado a WiFi: la versión ${upd.version} se instala sola cuando lo desconectes de la app (tarda 1-2 minutos).`;
+    $('btnUpdWifi').hidden = true; $('btnUpdCel').textContent = 'Actualizar ahora con el celular';
+  } else {
+    $('updTxt').textContent = `Hay una versión nueva para el escáner (actual ${esc.fw || '—'}). ¿Querés conectarlo al WiFi del local? Si no, se descarga con los datos del celular (${mb}) y se pasa por Bluetooth.`;
+    $('btnUpdWifi').hidden = false; $('btnUpdCel').textContent = 'Actualizar con datos del celular';
+  }
+}
+$('btnUpdNo').onclick = () => { $('updCard').hidden = true; };
+$('btnUpdWifi').onclick = () => openWifi();
+$('btnUpdCel').onclick = () => bleOta();
+
+// Espera el proximo paquete de un tipo (para la actualizacion por Bluetooth)
+const waiters = {};
+function waitPkt(type, ms = 10000){
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => { delete waiters[type]; rej(new Error('el escáner no respondió')); }, ms);
+    waiters[type] = txt => { clearTimeout(t); res(txt); };
+  });
+}
+
+async function bleOta(){
+  if (!upd || esc.otaBusy) return;
+  esc.otaBusy = true;
+  const msg = t => { $('updMsg').textContent = t; }, bar = p => { $('updBar').style.width = p + '%'; };
+  $('updBtns').hidden = true; $('updProg').hidden = false; bar(0);
+  try {
+    msg('Descargando firmware…');
+    const resp = await fetch(upd.url, { cache:'no-store' });
+    if (!resp.ok) throw new Error('descarga HTTP ' + resp.status);
+    const bin = new Uint8Array(await resp.arrayBuffer());
+    const sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bin))].map(b => b.toString(16).padStart(2,'0')).join('');
+    if (sha !== upd.sha256) throw new Error('el archivo descargado está dañado (SHA-256)');
+
+    msg('Autorizando con la base…');
+    let w = waitPkt(0xA7); await bleWrite(Uint8Array.from([0xA7, ...new TextEncoder().encode('?')]));
+    const ch = (await w).split('\t')[1];
+    const a = await rpcFirmware(ch);
+    if (!a.version || !a.firma) throw new Error('la base no autorizó la actualización');
+    w = waitPkt(0xA7);
+    await bleWrite(Uint8Array.from([0xA7, ...new TextEncoder().encode(['S', a.version, bin.length, a.sha256, a.firma].join('\t'))]));
+    const r = await w; if (r !== 'OK') throw new Error(r.split('\t')[1] || r);
+
+    msg('Enviando al escáner por Bluetooth… no cierres la app ni te alejes');
+    const wnr = rxChar.writeValueWithoutResponse ? b => rxChar.writeValueWithoutResponse(b) : b => rxChar.writeValue(b);
+    let size = 0, sent = 0, n = 0;
+    for (const s of [240, 180, 128, 64, 20]) {               // probar el bloque mas grande que acepte el celular
+      try { await wnr(Uint8Array.from([0xA8, ...bin.subarray(0, s)])); size = s; sent = s; break; } catch {}
+    }
+    if (!size) throw new Error('no se pudo enviar por Bluetooth');
+    const t0 = Date.now();
+    while (sent < bin.length) {
+      const part = bin.subarray(sent, Math.min(sent + size, bin.length));
+      const pkt = new Uint8Array(part.length + 1); pkt[0] = 0xA8; pkt.set(part, 1);
+      await wnr(pkt); sent += part.length; n++;
+      if (n % 16 === 0 || sent >= bin.length) {                // confirmar cada 16 bloques
+        const wa = waitPkt(0xA8, 15000); await bleWrite(Uint8Array.of(0xAA));
+        const ack = await wa;
+        if (ack === 'ERR' || +ack !== sent) throw new Error('error de transmisión (' + ack + ' / ' + sent + ')');
+        const p = Math.round(sent * 100 / bin.length), s = (Date.now() - t0) / 1000;
+        bar(p); msg(`Enviando… ${p}%  ·  faltan ~${Math.max(0, Math.round(s / sent * (bin.length - sent)))} s`);
+      }
+    }
+    msg('Verificando e instalando…');
+    w = waitPkt(0xA9, 20000); await bleWrite(Uint8Array.of(0xA9));
+    const fin = await w; if (fin !== 'OK') throw new Error(fin.split('\t')[1] || fin);
+    bar(100); msg('✓ Actualizado a v' + a.version + '. El escáner se reinicia: volvé a conectarlo en unos segundos.');
+    upd = null;
+  } catch (e) {
+    msg('No se pudo actualizar: ' + e.message + '. El escáner sigue con la versión anterior.');
+    $('updBtns').hidden = false;
+  }
+  esc.otaBusy = false;
+}
+
+async function onAuthPacket(type, text){
+  logRaw('ESC ' + type.toString(16).toUpperCase() + ' ' + text);
+  if (waiters[type]) { const f = waiters[type]; delete waiters[type]; f(text); return; }
+  if (type === 0xA0) {                                   // ID|cliente|bloqueado|challenge
+    const [id, , , challenge, fw, wifi, ssid, placa] = text.split('|');
+    esc.id = id; esc.challenge = challenge; esc.fw = fw || ''; esc.wifi = +(wifi || 0); esc.ssid = ssid || ''; esc.placa = placa || 's3lcd';
+    $('uEsc').textContent = id + ' · verificando…'; renderWifi();
+    showAuth('Verificando escáner…');
+    authorize(null, null);
+  } else if (type === 0xA1) {
+    if (text === 'OK' || text === 'VINCULADO') {
+      esc.ok = true; showAuth('');
+      $('uEsc').textContent = `${esc.id} · ${session.clienteNombre} (N° ${session.cliente})` + (text === 'VINCULADO' ? ' · asociado ✓' : ' ✓') + (esc.fw ? ' · FW ' + esc.fw : '');
+      setSave('', 'Leyendo…');
+      setBlocked(false); renderWifi(); maybeAskWifi(); checkUpdate();
+    } else if (text === 'BLOQUEADO') {
+      esc.ok = false; $('uEsc').textContent = esc.id + ' · BLOQUEADO';
+      showAuth(''); setSave('err', 'Bloqueado'); setBlocked(true);
+    } else {
+      esc.ok = false; showAuth('Respuesta de autorización inválida. Contactar a Sunra Argentina.', true);
+    }
+  } else if (type === 0xEB) {
+    esc.ok = false;
+    if ($('authBox').hidden) showAuth('El escáner no está autorizado.', true);
+  } else if (type === 0xA3) {                            // estado\tssid\tip\trssi\tfw
+    const [st, ssid, ip, rssi, fw] = text.split('\t');
+    const antes = esc.wifi;
+    esc.wifi = +st || 0; esc.ssid = ssid || ''; esc.ip = ip || ''; esc.rssi = +rssi || 0; if (fw) esc.fw = fw;
+    renderWifi(); showUpdText();
+    if (!$('wifiCard').hidden && esc.wifi === 3 && antes !== 3) { $('hWifi').className = 'hint'; $('hWifi').textContent = '✓ Escáner conectado a ' + esc.ssid; }
+  } else if (type === 0xA2) {
+    $('hWifi').className = 'hint' + (text === 'OK' ? '' : ' err');
+    $('hWifi').textContent = text === 'OK' ? 'Guardado. El escáner se está conectando… (puede tardar unos segundos)' : 'Error: ' + text.split('\t')[1];
+  } else if (type === 0xA4) {
+    $('hWifi').textContent = 'Red olvidada. El escáner sigue funcionando por Bluetooth.'; $('fSsid').value = '';
+  } else if (type === 0xA6) {
+    if (text) scanAcc.push(text); else renderScan();
+  } else if (type === 0xA5) {                            // OK\tuid  |  ERR\tuid\tmotivo
+    const [r, uid, msg] = text.split('\t');
+    const cb = upWait.get(uid); if (cb) { upWait.delete(uid); cb({ ok: r === 'OK', msg: msg || r }); }
+  }
+}
+
+// ================= Lector de codigo de barras (camara) =================
+let scanStream = null, scanTarget = null, scanLoop = null;
+const FORMATS = ['code_39','code_128','qr_code','data_matrix','ean_13','code_93','codabar','itf'];
+
+document.querySelectorAll('[data-scan]').forEach(b => b.onclick = () => openScanner(b.dataset.scan));
+$('btnScanClose').onclick = closeScanner;
+
+// Lector alternativo (ZXing) para navegadores sin BarcodeDetector: iPhone, Bluefy, Chrome en Windows
+const ZXING_URL = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+let zxingReady = null;
+function loadZXing(){
+  if (window.ZXing) return Promise.resolve();
+  if (!zxingReady) zxingReady = new Promise((ok, bad) => {
+    const sc = document.createElement('script'); sc.src = ZXING_URL; sc.onload = ok;
+    sc.onerror = () => { zxingReady = null; bad(new Error('no se pudo cargar el lector (¿sin internet?)')); };
+    document.head.appendChild(sc);
+  });
+  return zxingReady;
+}
+function makeZXingDecoder(){
+  const Z = window.ZXing, F = Z.BarcodeFormat;
+  const hints = new Map();
+  hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [F.CODE_39, F.CODE_128, F.QR_CODE, F.DATA_MATRIX, F.EAN_13, F.CODE_93, F.ITF, F.CODABAR]);
+  hints.set(Z.DecodeHintType.TRY_HARDER, true);
+  const reader = new Z.MultiFormatReader(); reader.setHints(hints);
+  return canvas => {
+    const src = new Z.HTMLCanvasElementLuminanceSource(canvas);
+    for (const lum of [src, src.invert()]) {          // normal y negativo (etiquetas blanco sobre negro)
+      try { return reader.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(lum))).getText(); } catch {}
+    }
+    return null;
+  };
+}
+
+async function openScanner(target){
+  scanTarget = target;
+  const nativo = 'BarcodeDetector' in window;
+  let det = null, zx = null;
+  try {
+    if (nativo) {
+      const sup = await BarcodeDetector.getSupportedFormats();
+      det = new BarcodeDetector({ formats: FORMATS.filter(f => sup.includes(f)) });
+    } else {
+      $('scanner').hidden = false; $('scanMsg').textContent = 'Preparando el lector…';
+      await loadZXing(); zx = makeZXingDecoder();
+    }
+    scanStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ideal:1920}, height:{ideal:1080} }, audio:false });
+  } catch (e) {
+    $('scanner').hidden = true;
+    alert('No se pudo abrir el lector: ' + e.message + '\nPodés escribir el número a mano.'); return;
+  }
+  const v = $('video'); v.setAttribute('playsinline', ''); v.srcObject = scanStream; await v.play();
+  $('scanner').hidden = false; $('scanMsg').textContent = 'Apuntá al código de barras';
+  const cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently:true });
+  let invert = false;
+  const done = raw => {
+    if (scanTarget === 'wifiqr') { closeScanner(); aplicarWifiQr(raw); return; }
+    const val = raw.trim().toUpperCase();
+    $(scanTarget).value = scanTarget === 'fVin' ? val.replace(/[^A-Z0-9]/g,'').slice(-17) : val;
+    if (navigator.vibrate) navigator.vibrate(80);
+    closeScanner(); validate(); loadHistory();
+  };
+  const tick = async () => {
+    if (!scanStream) return;
+    try {
+      if (det) {
+        let src = v;
+        if (invert) {  // las etiquetas de bateria son blanco sobre negro: probar invertida
+          cv.width = v.videoWidth; cv.height = v.videoHeight;
+          ctx.filter = 'invert(1) grayscale(1) contrast(1.4)';
+          ctx.drawImage(v, 0, 0); src = cv;
+        }
+        const c = (await det.detect(src)).find(c => c.rawValue && c.rawValue.trim().length >= 6);
+        if (c) return done(c.rawValue);
+        invert = !invert;
+      } else if (v.videoWidth) {
+        // franja central (donde esta el recuadro verde), reducida para que sea rapido
+        const sw = v.videoWidth * 0.9, sh = v.videoHeight * 0.4;
+        const sx = (v.videoWidth - sw) / 2, sy = (v.videoHeight - sh) / 2;
+        const scale = Math.min(1, 1200 / sw);
+        cv.width = Math.round(sw * scale); cv.height = Math.round(sh * scale);
+        ctx.drawImage(v, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+        const txt = zx(cv);
+        if (txt && txt.trim().length >= 6) return done(txt);
+      }
+    } catch {}
+    scanLoop = setTimeout(tick, det ? 120 : 60);
+  };
+  tick();
+}
+function closeScanner(){
+  clearTimeout(scanLoop);
+  if (scanStream) scanStream.getTracks().forEach(t => t.stop());
+  scanStream = null; $('scanner').hidden = true;
+}
+
+// ================= WiFi desde el QR (formato WIFI:T:WPA;S:red;P:clave;;) =================
+function parseWifiQr(txt){
+  if (!/^WIFI:/i.test(txt)) return null;
+  const out = {}; let k = null, v = '', esc = false;
+  const body = txt.slice(5);
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (esc) { v += c; esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (k === null && c === ':') { k = v.toUpperCase(); v = ''; continue; }
+    if (c === ';') { if (k) out[k] = v; k = null; v = ''; continue; }
+    v += c;
+  }
+  if (k) out[k] = v;
+  if (!out.S) return null;
+  return { ssid: out.S, pass: (out.T || '').toLowerCase() === 'nopass' ? '' : (out.P || '') };
+}
+function aplicarWifiQr(raw){
+  const w = parseWifiQr(String(raw).trim());
+  if (!w) { $('hWifi').className = 'hint err'; $('hWifi').textContent = 'Ese código no es un QR de WiFi. Probá de nuevo o escribí los datos.'; return; }
+  $('fSsid').value = w.ssid; $('fWpass').value = w.pass;
+  $('hWifi').className = 'hint'; $('hWifi').textContent = `✓ Datos de "${w.ssid}" cargados desde el QR. Tocá "Guardar y conectar".`;
+  $('btnWifiSave').scrollIntoView({ behavior:'smooth', block:'center' });
+}
+$('btnQrCam').onclick = () => openScanner('wifiqr');
+$('btnQrFoto').onclick = () => $('fQrImg').click();
+$('fQrImg').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  $('hWifi').className = 'hint'; $('hWifi').textContent = 'Leyendo el QR de la imagen…';
+  try {
+    const img = await createImageBitmap(file);
+    let txt = null;
+    if ('BarcodeDetector' in window) {
+      const r = await new BarcodeDetector({ formats:['qr_code'] }).detect(img);
+      if (r.length) txt = r[0].rawValue;
+    }
+    if (!txt) {                                        // lector alternativo (iPhone / sin BarcodeDetector)
+      await loadZXing();
+      const zx = makeZXingDecoder();
+      for (const max of [1200, 800, 1800]) {           // probar varios tamanos
+        const sc = Math.min(1, max / Math.max(img.width, img.height));
+        const cv = document.createElement('canvas'); cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        txt = zx(cv); if (txt) break;
+      }
+    }
+    if (!txt) throw new Error('no se encontró un QR en la imagen');
+    aplicarWifiQr(txt);
+  } catch (err) { $('hWifi').className = 'hint err'; $('hWifi').textContent = 'No se pudo leer: ' + err.message + '. Probá recortar la captura alrededor del QR.'; }
+};
+
+// arranque
+showView(false);
+updateNet();
+flushQueue();
+</script>
+</body>
+</html>
