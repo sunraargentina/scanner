@@ -64,6 +64,7 @@
     <button data-tab="usos">Usos</button>
     <button data-tab="bat">Baterías</button>
     <button data-tab="fw">Firmware</button>
+    <button data-tab="limp">Limpieza</button>
   </div>
 
   <!-- ESCANERES -->
@@ -103,6 +104,34 @@
     </div>
     <div class="mut">Los escáneres con WiFi buscan actualizaciones cada 10 minutos y se actualizan cuando no están en uso. Los que no tienen WiFi reciben el aviso en la app y se actualizan con los datos del celular. La versión publicada es la que reciben todos (salvo los que tengan una versión forzada).</div>
     <div id="fwList" style="display:grid;gap:10px"></div>
+  </section>
+  <!-- LIMPIEZA -->
+  <section id="tab-limp" hidden style="display:grid;gap:12px">
+    <div class="card" style="border-color:var(--bad)"><b style="color:var(--bad)">Todo lo que se borra acá no se puede recuperar.</b> <span class="mut">Supabase gratis no hace copias de seguridad: si dudás, primero descargá el CSV en Baterías.</span></div>
+    <div class="card" style="display:grid;gap:8px">
+      <b>Registro de usos</b>
+      <div class="row"><span class="mut">Anteriores a</span><input type="date" id="lUsosF" style="width:auto"><button class="bad" data-limp="usos">Borrar</button></div>
+      <span class="mut">Sin fecha = borra todo el registro de usos.</span>
+    </div>
+    <div class="card" style="display:grid;gap:8px">
+      <b>Lecturas</b>
+      <div class="row"><span class="mut">Anteriores a</span><input type="date" id="lLecF" style="width:auto"><button class="bad" data-limp="lecturas">Borrar</button></div>
+      <span class="mut">Sin fecha = borra TODAS las lecturas de todas las baterías.</span>
+    </div>
+    <div class="card" style="display:grid;gap:8px">
+      <b>Una batería completa</b>
+      <div class="row"><input id="lBat" placeholder="N° de serie exacto" style="flex:1"><button class="bad" data-limp="bateria">Borrar sus lecturas</button></div>
+    </div>
+    <div class="card" style="display:grid;gap:8px">
+      <b>Lecturas de un concesionario</b>
+      <div class="row"><input id="lCli" placeholder="N° de cliente" style="flex:1"><button class="bad" data-limp="cliente">Borrar sus lecturas</button></div>
+    </div>
+    <div class="card" style="display:grid;gap:8px">
+      <b>Sesiones de consulta abiertas</b> <span class="mut" id="lSes">—</span>
+      <div class="row"><button class="warn" data-limp="sesiones">Cerrar todas</button></div>
+      <span class="mut">Cada concesionario tendrá que volver a confirmar con el botón de su escáner.</span>
+    </div>
+    <div class="mut">Para borrar un escáner, usá el botón <b>Borrar</b> en la pestaña Escáneres. Las versiones de firmware se borran en Firmware.</div>
   </section>
 </main>
 
@@ -148,7 +177,8 @@ $('btnOut').onclick = async () => { await sb.auth.signOut(); checkSession(); };
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 function showTab(t){
   document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-  ['esc','usos','bat','fw'].forEach(x => $('tab-' + x).hidden = x !== t);
+  ['esc','usos','bat','fw','limp'].forEach(x => $('tab-' + x).hidden = x !== t);
+  if (t === 'limp') loadSesiones();
   if (t === 'usos') loadUsos();
   if (t === 'fw') loadFw();
   if (t === 'bat' && !lastBat.length) loadBat();
@@ -192,6 +222,7 @@ function renderEsc(){
         <button data-act="editar" data-id="${e.id}">Editar</button>
         <button data-act="firmware" data-id="${e.id}">Firmware</button>
         <button data-act="usos" data-id="${e.id}">Ver usos</button>
+        <button class="bad" data-act="borrar" data-id="${e.id}">Borrar</button>
       </div>
     </div>`).join('');
   document.querySelectorAll('[data-act]').forEach(b => b.onclick = () => accion(b.dataset.act, b.dataset.id));
@@ -235,11 +266,21 @@ async function accion(act, id){
     updEsc(id, { fw_objetivo: ver || null }, ver ? `${n} instalará ${ver} en su próximo contacto por WiFi.` : `${n} sigue la versión publicada.`);
   } else if (act === 'usos') {
     $('fUso').value = id; showTab('usos');
+  } else if (act === 'borrar') {
+    if (!confirm(`¿Borrar ${n} (${e.cliente_nombre || 'sin cliente'}) de la base?\nSi se vuelve a conectar, aparece como escáner nuevo y pide registro.`)) return;
+    let { data, error } = await sb.rpc('admin_borrar_escaner', { p_id: id, p_con_lecturas: false });
+    const m = error && /TIENE_LECTURAS:(\d+)/.exec(error.message);
+    if (m) {
+      if (prompt(`${n} tiene ${m[1]} lecturas guardadas.\nPara borrar el escáner Y sus ${m[1]} lecturas escribí BORRAR:`) !== 'BORRAR') return;
+      ({ data, error } = await sb.rpc('admin_borrar_escaner', { p_id: id, p_con_lecturas: true }));
+    }
+    if (error) { alert('Error: ' + error.message); return; }
+    toast(`${n} borrado` + (data ? ` con ${data} lecturas` : '')); loadEsc();
   }
 }
 
 // ---------------- Usos ----------------
-const RES = { O:['Uso normal','var(--acc)'], V:['Vinculado','var(--blue)'], B:['Bloqueado','var(--bad)'] };
+const RES = { O:['Uso normal','var(--acc)'], V:['Vinculado','var(--blue)'], B:['Bloqueado','var(--bad)'], C:['Consulta (web)','var(--yel)'] };
 async function loadUsos(){
   let q = sb.from('intentos').select('*').order('creado', { ascending:false }).limit(300);
   const f = $('fUso').value.trim();
@@ -267,7 +308,10 @@ async function loadBat(){
     batCols = COLS_RES; $('batInfo').textContent = 'Último estado de cada batería (tocá una fila para ver su historial)';
   } else {
     ({ data, error } = await sb.from('lecturas').select('*').or(`serie_bateria.eq.${f},vin.eq.${f}`).order('creado', { ascending:false }).limit(500));
-    batCols = COLS_LEC; $('batInfo').textContent = data ? `${data.length} lecturas para ${f}` : '';
+    batCols = COLS_LEC;
+    $('batInfo').innerHTML = data ? `${data.length} lecturas para <b class="mono">${esc(f)}</b>` +
+      (data.length ? ` <button class="bad" id="btnBatAll" style="padding:3px 10px;margin-left:8px">Borrar todas</button>` : '') : '';
+    if ($('btnBatAll')) $('btnBatAll').onclick = () => limpiar('bateria', null, f);
   }
   if (error) { $('batBody').innerHTML = `<tr><td class="err">${esc(error.message)}</td></tr>`; return; }
   lastBat = data;
@@ -300,6 +344,29 @@ $('btnCsv').onclick = () => {
   a.download = 'sunra-baterias-' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
 };
+
+// ---------------- Limpieza ----------------
+const LIMP_TXT = { usos:'el registro de usos', lecturas:'lecturas', bateria:'todas las lecturas de la batería', cliente:'todas las lecturas del cliente', sesiones:'todas las sesiones de consulta' };
+async function limpiar(que, antes, valor){
+  if (que !== 'sesiones' && prompt(`Vas a borrar ${LIMP_TXT[que]}${valor ? ' ' + valor : ''}${antes ? ' anteriores al ' + new Date(antes).toLocaleDateString('es-AR') : (que === 'bateria' || que === 'cliente' ? '' : ' (TODO)')}.\nNo se puede deshacer. Escribí BORRAR para confirmar:`) !== 'BORRAR') return;
+  if (que === 'sesiones' && !confirm('¿Cerrar todas las sesiones de consulta abiertas?')) return;
+  const { data, error } = await sb.rpc('admin_limpiar', { p_que: que, p_antes: antes, p_valor: valor });
+  if (error) { alert('Error: ' + error.message); return; }
+  toast(`Listo: ${data} registros borrados`);
+  if (que === 'bateria' && $('fBat').value.trim()) loadBat();
+  loadSesiones();
+}
+document.querySelectorAll('[data-limp]').forEach(b => b.onclick = () => {
+  const q = b.dataset.limp;
+  const fecha = q === 'usos' ? $('lUsosF').value : q === 'lecturas' ? $('lLecF').value : '';
+  const valor = q === 'bateria' ? $('lBat').value.trim().toUpperCase() : q === 'cliente' ? $('lCli').value.trim().toUpperCase() : null;
+  if ((q === 'bateria' || q === 'cliente') && !valor) { alert('Completá el ' + (q === 'bateria' ? 'N° de serie' : 'N° de cliente')); return; }
+  limpiar(q, fecha ? new Date(fecha + 'T00:00:00').toISOString() : null, valor);
+});
+async function loadSesiones(){
+  const { data, error } = await sb.from('consulta_sesiones').select('cliente,expira').gt('expira', new Date().toISOString());
+  $('lSes').textContent = error ? '' : data.length ? `${data.length} abiertas (${[...new Set(data.map(x => x.cliente))].join(', ')})` : 'ninguna abierta';
+}
 
 // ---------------- Firmware ----------------
 const fmtKB = b => b ? (b / 1024).toFixed(0) + ' KB' : '—';

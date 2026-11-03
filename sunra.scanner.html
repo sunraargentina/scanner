@@ -246,6 +246,13 @@
     <p class="mut" style="margin:10px 0 0">Estado batería: <b id="bst">--</b> · Bytes 62–66: <b id="bal">--</b> · Byte 81: <b id="b81">--</b></p>
   </section>
 
+  <section class="card" id="hcCard">
+    <h2>Historial de esta batería <span id="hcInfo"></span></h2>
+    <p class="mut" id="hcMsg" style="margin:0 0 8px">Todas las lecturas guardadas de la batería que estás leyendo.</p>
+    <button id="btnHist">Ver historial completo</button>
+    <div id="hcBody" style="overflow-x:auto"></div>
+  </section>
+
   <section class="card">
     <h2>Registro y extras</h2>
     <div class="row">
@@ -461,18 +468,17 @@ const LS = { get:(k,d)=>{ try { return JSON.parse(localStorage.getItem(k)) ?? d;
 
 async function dbPing(){
   if (!DB_OK) return false;
-  try { const r = await fetch(SUPABASE_URL + '/rest/v1/lecturas?select=id&limit=1', { headers:H, cache:'no-store' }); return r.ok; }
+  try { const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ping', { method:'POST', headers:H, body:'{}', cache:'no-store' }); return r.ok; }
   catch { return false; }
 }
 async function dbInsert(row){
-  const r = await fetch(SUPABASE_URL + '/rest/v1/lecturas?on_conflict=lectura_uid', { method:'POST',
-    headers:{ ...H, Prefer:'return=minimal,resolution=ignore-duplicates' }, body:JSON.stringify(row) });
+  const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/subir_lectura_app', { method:'POST',
+    headers:H, body:JSON.stringify({ p_datos: row }) });
   if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()).slice(0,120));
 }
 async function dbHistory(serie){
-  const q = '/rest/v1/lecturas?select=creado,vin,tecnico,soc,soh,ciclos,celda_dif&serie_bateria=eq.' +
-            encodeURIComponent(serie) + '&order=creado.desc&limit=10';
-  const r = await fetch(SUPABASE_URL + q, { headers:H });
+  const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/historial_bateria', { method:'POST', headers:H,
+    body:JSON.stringify({ p_serie: serie }) });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
@@ -613,7 +619,7 @@ $('btnSave').onclick = saveReading;
 
 // cada nueva conexion BLE vuelve a guardar automaticamente
 const _connect = connect;
-connect = async () => { savedThisConn = false; esc = { id:null, ok:false, wifi:0 }; setBlocked(false); $('updCard').hidden = true; $('updProg').hidden = true; $('updBtns').hidden = false; upd = null; showAuth(''); $('regCard').hidden = true; $('wifiAsk').hidden = true; $('wifiCard').hidden = true; renderWifi(); $('uEsc').textContent = 'conectando…'; await _connect(); };
+connect = async () => { savedThisConn = false; $('hcBody').innerHTML = ''; $('hcInfo').textContent = ''; $('btnHist').textContent = 'Ver historial completo'; esc = { id:null, ok:false, wifi:0 }; setBlocked(false); $('updCard').hidden = true; $('updProg').hidden = true; $('updBtns').hidden = false; upd = null; showAuth(''); $('regCard').hidden = true; $('wifiAsk').hidden = true; $('wifiCard').hidden = true; renderWifi(); $('uEsc').textContent = 'conectando…'; await _connect(); };
 
 // ================= Vinculacion / bloqueo del escaner =================
 let esc = { id:null, ok:false };
@@ -865,6 +871,32 @@ async function onAuthPacket(type, text){
     const cb = upWait.get(uid); if (cb) { upWait.delete(uid); cb({ ok: r === 'OK', msg: msg || r }); }
   }
 }
+
+
+// ================= Historial completo de la bateria que se esta leyendo =================
+// Solo datos de la bateria (sin concesionario ni tecnico). Requiere el escaner conectado y habilitado.
+async function verHistorial(){
+  const serie = session && session.serie;
+  if (!serie || !esc.id || !esc.ok) { $('hcMsg').textContent = 'Conectá el escáner para ver el historial.'; return; }
+  const b = $('btnHist'); b.disabled = true; $('hcMsg').textContent = 'Buscando…';
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/historial_bateria_completo', { method:'POST', headers:H,
+      body:JSON.stringify({ p_serie: serie, p_escaner: esc.id }) });
+    const t = await r.text();
+    if (!r.ok) { let m = t; try { m = JSON.parse(t).message || t; } catch {} throw new Error(m === 'ESCANER_NO_HABILITADO' ? 'El escáner no está habilitado.' : m); }
+    const rows = JSON.parse(t);
+    $('hcInfo').textContent = rows.length ? rows.length + ' lecturas' : '';
+    $('hcMsg').textContent = rows.length ? 'Batería ' + serie + ' · más reciente arriba' : 'Esta batería no tiene lecturas guardadas todavía.';
+    const est = r => r.protect ? '<span style="color:var(--bad)">Prot.</span>' : r.alarm ? '<span style="color:var(--warn)">Alarma</span>' : '<span style="color:var(--acc)">OK</span>';
+    $('hcBody').innerHTML = rows.length ? '<table class="hist"><tr><th>Fecha</th><th>VIN</th><th>V</th><th>SOC</th><th>SOH</th><th>Ciclos</th><th>Dif</th><th></th></tr>' +
+      rows.map(r => `<tr><td>${new Date(r.creado).toLocaleDateString()}</td><td>${r.vin ? '…' + esc_(r.vin.slice(-6)) : '—'}</td>` +
+        `<td>${r.voltaje ?? '-'}</td><td>${r.soc ?? '-'}%</td><td>${r.soh ?? '-'}%</td><td>${r.ciclos ?? '-'}</td><td>${r.celda_dif ?? '-'}</td><td>${est(r)}</td></tr>`).join('') + '</table>' : '';
+    b.textContent = 'Actualizar historial';
+  } catch (e) {
+    $('hcMsg').innerHTML = `<span style="color:var(--bad)">No se pudo leer el historial: ${esc_(e.message)}</span>`;
+  } finally { b.disabled = false; }
+}
+$('btnHist').onclick = verHistorial;
 
 // ================= Lector de codigo de barras (camara) =================
 let scanStream = null, scanTarget = null, scanLoop = null;

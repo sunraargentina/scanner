@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1418">
+<title>Sunra Scanner · Consultas</title>
+<style>
+  :root{--bg:#0f1418;--panel:#171e24;--line:#26313a;--txt:#e8eef2;--mut:#8a99a6;--acc:#2fd08a;--warn:#ffb020;--bad:#ff5a5f;--blue:#4aa8ff;--yel:#f5c400}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{position:sticky;top:0;z-index:5;background:rgba(15,20,24,.96);border-bottom:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px}
+  header h1{font-size:17px;margin:0;flex:1} header h1 small{display:block;font-size:11px;color:var(--mut);font-weight:400}
+  .logo{width:10px;height:22px;background:var(--yel);border-radius:3px}
+  button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--txt);border-radius:10px;padding:8px 12px;cursor:pointer}
+  button.pri{background:var(--acc);color:#04210f;border-color:var(--acc);font-weight:600}
+  button:disabled{opacity:.45}
+  main{padding:12px;max-width:980px;margin:auto;display:grid;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+  input{font:inherit;background:#121a20;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:9px 10px;width:100%}
+  .tabs{display:flex;gap:6px} .tabs button.on{background:var(--txt);color:var(--bg);border-color:var(--txt)}
+  .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .mut{color:var(--mut);font-size:13px} .mono{font-family:ui-monospace,Consolas,monospace}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .stats div{background:#121a20;border-radius:10px;padding:8px 10px} .stats b{font-size:22px;display:block} .stats span{font-size:12px;color:var(--mut)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  th{color:var(--mut);font-weight:500} .scroll{overflow-x:auto} tbody tr{cursor:pointer} tbody tr:hover{background:#1c252c}
+  .ok{color:var(--acc)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+  .msg{border-radius:10px;padding:10px 12px;font-size:14px;margin-top:10px}
+  .msg.info{background:rgba(74,168,255,.1);border:1px solid var(--blue);color:var(--blue)}
+  .msg.err{background:rgba(255,90,95,.1);border:1px solid var(--bad);color:var(--bad)}
+  .msg.big{font-size:18px;text-align:center;padding:18px}
+  .cells{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px}
+  .cells div{background:#121a20;border-radius:8px;padding:6px;text-align:center;font-size:13px} .cells small{display:block;color:var(--mut);font-size:11px}
+  .grid2{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
+  #det{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;display:flex;align-items:flex-start;justify-content:center;padding:20px 10px;overflow:auto}
+  #det .card{width:100%;max-width:640px}
+  [hidden]{display:none!important}
+  #login{max-width:440px;margin:8vh auto 0}
+</style>
+</head>
+<body>
+<header>
+  <span class="logo"></span>
+  <h1>Sunra Scanner · Consultas <small id="who">Sin sesión</small></h1>
+  <button id="btnOut" hidden>Salir</button>
+</header>
+
+<!-- INGRESO: con el escaner y su boton -->
+<section id="login" class="card">
+  <h2 style="margin:0 0 8px;font-size:18px">Ingresar con tu escáner</h2>
+  <p class="mut" style="margin:0 0 12px">Tené el escáner encendido y cerca. Al conectarlo te va a pedir que <b>aprietes el botón BOOT</b> del escáner: esa es tu contraseña. Si el escáner está bloqueado no se puede consultar.</p>
+  <button class="pri" id="btnLogin" style="width:100%">Conectar escáner</button>
+  <div id="loginMsg"></div>
+  <p class="mut" style="margin:12px 0 0">Funciona en Chrome (Android o PC con Bluetooth). En iPhone usá la app <b>Bluefy</b>.</p>
+</section>
+
+<main id="app" hidden>
+  <div class="tabs">
+    <button data-tab="mias" class="on">Mis lecturas</button>
+    <button data-tab="bat">Buscar batería</button>
+  </div>
+
+  <section id="tab-mias" style="display:grid;gap:12px">
+    <div class="stats">
+      <div><b id="sLec">-</b><span>Lecturas</span></div>
+      <div><b id="sBat">-</b><span>Baterías</span></div>
+      <div><b id="sAle">-</b><span>Con alertas</span></div>
+    </div>
+    <div class="card row">
+      <input id="fTxt" placeholder="N° de serie o VIN (o parte)" style="flex:2;min-width:180px">
+      <input id="fDesde" type="date" style="flex:1;min-width:130px" title="Desde">
+      <input id="fHasta" type="date" style="flex:1;min-width:130px" title="Hasta">
+      <button class="pri" id="btnBuscar">Buscar</button>
+      <button id="btnCsv">CSV</button>
+    </div>
+    <div class="card scroll"><table><thead><tr><th>Fecha</th><th>Batería</th><th>VIN</th><th>Técnico</th><th>V</th><th>SOC</th><th>SOH</th><th>Ciclos</th><th>Dif mV</th><th>Estado</th></tr></thead><tbody id="tbMias"></tbody></table></div>
+  </section>
+
+  <section id="tab-bat" hidden style="display:grid;gap:12px">
+    <div class="card row">
+      <input id="fSerie" placeholder="N° de serie exacto de la batería" style="flex:1;min-width:200px" autocomplete="off">
+      <button class="pri" id="btnSerie">Ver historial</button>
+    </div>
+    <div class="mut" id="batInfo">Muestra todas las lecturas de la batería, también las hechas por otros concesionarios (sin sus datos).</div>
+    <div class="card scroll"><table><thead><tr><th>Fecha</th><th>Quién</th><th>VIN</th><th>V</th><th>SOC</th><th>SOH</th><th>Ciclos</th><th>Dif mV</th><th>Estado</th></tr></thead><tbody id="tbBat"></tbody></table></div>
+  </section>
+</main>
+
+<div id="det" hidden><div class="card" id="detBody"></div></div>
+
+<script>
+// ================= CONFIGURACION (la misma que sunra.scanner.html) =================
+const SUPABASE_URL = 'https://tiwryaujnlvjburzfmqq.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpd3J5YXVqbmx2amJ1cnpmbXFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2NjM4MTAsImV4cCI6MjEwOTIzOTgxMH0.RPZumfRs6J05b8CedtR8RR2oi1a3RNdiTagpHxBp2qU';
+const CONTACTO = 'garantia@sunra.com.ar';
+// ===================================================================================
+
+const SVC = '6e400001-b5a3-f393-e0a9-e50e24dcca9e', RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e', TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+const H = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fdt = d => d ? new Date(d).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' }) : '—';
+const ERRORES = {
+  BLOQUEADO: 'Tu escáner está bloqueado. Comunicate con Sunra Argentina (' + CONTACTO + ').',
+  SIN_ASIGNAR: 'El escáner todavía no está vinculado a un concesionario. Vinculalo primero desde la app Sunra Scanner.',
+  NO_REGISTRADO: 'El escáner no está registrado. Conectalo primero desde la app Sunra Scanner.',
+  DESAFIO_VENCIDO: 'Pasó demasiado tiempo. Probá de nuevo.',
+  FIRMA_INVALIDA: 'El escáner no pudo confirmar la identidad. Probá de nuevo.',
+  SESION_VENCIDA: 'La sesión terminó. Volvé a ingresar con el escáner.',
+  SERIE_CORTA: 'El N° de serie debe tener al menos 6 caracteres.',
+  NO_ENCONTRADA: 'No se encontró la lectura.'
+};
+
+async function rpc(fn, body){
+  const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + fn, { method:'POST', headers:H, body:JSON.stringify(body || {}) });
+  const t = await r.text();
+  if (!r.ok) {
+    let m = t; try { m = JSON.parse(t).message || t; } catch {}
+    const e = new Error(ERRORES[m] || m); e.code = m; throw e;
+  }
+  return t ? JSON.parse(t) : null;
+}
+
+// ---------------- Sesion ----------------
+let ses = null;
+try { ses = JSON.parse(sessionStorage.getItem('sunra_consulta') || 'null'); } catch {}
+if (ses && new Date(ses.expira) < new Date()) ses = null;
+
+function showSession(){
+  $('login').hidden = !!ses; $('app').hidden = !ses; $('btnOut').hidden = !ses;
+  $('who').textContent = ses ? `Cliente N° ${ses.cliente}${ses.cliente_nombre ? ' · ' + ses.cliente_nombre : ''} · hasta ${new Date(ses.expira).toLocaleTimeString('es-AR', { timeStyle:'short' })}` : 'Sin sesión';
+  if (ses) buscarMias();
+}
+function salir(msg){
+  if (ses) rpc('cerrar_consulta', { p_token: ses.token }).catch(() => {});
+  ses = null; sessionStorage.removeItem('sunra_consulta'); showSession();
+  if (msg) loginMsg('err', msg);
+}
+$('btnOut').onclick = () => salir();
+function onErr(e, destino){
+  if (e.code === 'SESION_VENCIDA' || e.code === 'BLOQUEADO') return salir(e.message);
+  destino.innerHTML = `<tr><td colspan="10" class="bad">${esc(e.message)}</td></tr>`;
+}
+function loginMsg(cls, txt){ $('loginMsg').innerHTML = txt ? `<div class="msg ${cls}">${txt}</div>` : ''; }
+
+// ---------------- Ingreso con el escaner (Bluetooth + boton BOOT) ----------------
+$('btnLogin').onclick = async () => {
+  if (!navigator.bluetooth) { loginMsg('err', 'Este navegador no tiene Bluetooth. Usá Chrome en Android o PC, o Bluefy en iPhone.'); return; }
+  let dev = null, timer = null;
+  const btn = $('btnLogin'); btn.disabled = true;
+  try {
+    loginMsg('info', 'Elegí tu escáner en la lista…');
+    dev = await navigator.bluetooth.requestDevice({ filters:[{ namePrefix:'SUNRA-SCAN-' }], optionalServices:[SVC] });
+    loginMsg('info', 'Conectando con ' + esc(dev.name) + '…');
+    const srv = (await (await dev.gatt.connect()).getPrimaryService(SVC));
+    const rx = await srv.getCharacteristic(RX), tx = await srv.getCharacteristic(TX);
+    let espera = null;                                      // { tipo, resolve }
+    tx.addEventListener('characteristicvaluechanged', ev => {
+      const v = new Uint8Array(ev.target.value.buffer);
+      if (v.length < 2) return;
+      const txt = new TextDecoder().decode(v.slice(2, 2 + v[1]));
+      if (espera && v[0] === espera.tipo) espera.resolve(txt);
+    });
+    await tx.startNotifications();
+    const pedir = (bytes, tipo, ms) => new Promise((ok, bad) => {
+      const to = setTimeout(() => bad(new Error('El escáner no respondió')), ms);
+      espera = { tipo, resolve: t => { clearTimeout(to); ok(t); } };
+      rx.writeValue(bytes).catch(bad);
+    });
+    const esperar = (tipo, ms) => new Promise((ok, bad) => {
+      const to = setTimeout(() => bad(new Error('Se agotó el tiempo')), ms);
+      espera = { tipo, resolve: t => { clearTimeout(to); ok(t); } };
+    });
+
+    // 1) Datos del escaner
+    const info = (await pedir(Uint8Array.of(0xA0), 0xA0, 5000)).split('|');
+    const id = info[0], bloq = info[2] === '1';
+    if (bloq) throw Object.assign(new Error(ERRORES.BLOQUEADO), { code:'BLOQUEADO' });
+
+    // 2) Desafio de la base y firma con el boton
+    loginMsg('info', 'Verificando el escáner…');
+    const nonce = await rpc('pedir_desafio_consulta', { p_id: id });
+    const r1 = await pedir(Uint8Array.from([0xAB, ...new TextEncoder().encode(nonce)]), 0xAB, 5000);
+    if (r1.startsWith('ERR')) throw new Error(r1.split('\t')[1] || 'El escáner rechazó la consulta');
+    let seg = 30;
+    const cuenta = () => loginMsg('info big', `👉 Apretá el botón <b>BOOT</b> del escáner<br><span style="font-size:14px">${seg} s</span>`);
+    cuenta(); timer = setInterval(() => { seg = Math.max(0, seg - 1); cuenta(); }, 1000);
+    const r2 = await esperar(0xAB, 32000);
+    clearInterval(timer); timer = null;
+    if (!r2.startsWith('OK')) throw new Error(r2.split('\t')[1] || 'No se confirmó');
+    const [, rid, , firma] = r2.split('\t');
+
+    // 3) Sesion
+    loginMsg('info', 'Abriendo la sesión…');
+    ses = await rpc('abrir_consulta', { p_id: rid, p_nonce: nonce, p_firma: firma });
+    sessionStorage.setItem('sunra_consulta', JSON.stringify(ses));
+    loginMsg('', ''); showSession();
+  } catch (e) {
+    if (e.name === 'NotFoundError') loginMsg('', '');           // cancelo la lista
+    else loginMsg('err', esc(e.message));
+  } finally {
+    if (timer) clearInterval(timer);
+    if (dev && dev.gatt.connected) dev.gatt.disconnect();
+    btn.disabled = false;
+  }
+};
+
+// ---------------- Pestañas ----------------
+document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b));
+  $('tab-mias').hidden = b.dataset.tab !== 'mias'; $('tab-bat').hidden = b.dataset.tab !== 'bat';
+});
+
+// ---------------- Tablas ----------------
+const estadoTxt = r => r.protect ? '<span class="bad">Protección</span>' : r.alarm ? '<span class="warn">Alarma</span>' : '<span class="ok">OK</span>';
+const difTxt = d => d == null ? '—' : `<span class="${d > 80 ? 'bad' : d > 30 ? 'warn' : ''}">${d}</span>`;
+let mias = [], serieActual = '';
+
+async function buscarMias(){
+  const tb = $('tbMias'); tb.innerHTML = '<tr><td colspan="10" class="mut">Buscando…</td></tr>';
+  try {
+    mias = await rpc('consulta_lecturas', { p_token: ses.token, p_texto: $('fTxt').value.trim() || null,
+      p_desde: $('fDesde').value || null, p_hasta: $('fHasta').value || null, p_limite: 1000 });
+    $('sLec').textContent = mias.length;
+    $('sBat').textContent = new Set(mias.map(r => r.serie_bateria)).size;
+    $('sAle').textContent = mias.filter(r => r.protect || r.alarm || r.celda_dif > 80).length;
+    tb.innerHTML = mias.length ? mias.map(r => `<tr data-id="${r.id}">
+      <td>${fdt(r.creado)}</td><td class="mono">${esc(r.serie_bateria)}</td><td class="mono">${r.vin ? '…' + esc(r.vin.slice(-6)) : '—'}</td>
+      <td>${esc(r.tecnico) || '—'}</td><td>${r.voltaje ?? '—'}</td><td>${r.soc ?? '—'}%</td><td>${r.soh ?? '—'}%</td>
+      <td>${r.ciclos ?? '—'}</td><td>${difTxt(r.celda_dif)}</td><td>${estadoTxt(r)}</td></tr>`).join('')
+      : '<tr><td colspan="10" class="mut">Sin lecturas con esos filtros</td></tr>';
+    tb.querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => detalle(tr.dataset.id));
+  } catch (e) { onErr(e, tb); }
+}
+$('btnBuscar').onclick = buscarMias;
+$('fTxt').addEventListener('keydown', e => { if (e.key === 'Enter') buscarMias(); });
+
+async function buscarSerie(){
+  const s = $('fSerie').value.trim().toUpperCase(), tb = $('tbBat');
+  if (!s) return;
+  tb.innerHTML = '<tr><td colspan="9" class="mut">Buscando…</td></tr>';
+  try {
+    const rows = await rpc('consulta_bateria', { p_token: ses.token, p_serie: s });
+    serieActual = s;
+    $('batInfo').innerHTML = rows.length ? `${rows.length} lecturas de <b class="mono">${esc(s)}</b>` : `No hay lecturas de <b class="mono">${esc(s)}</b>`;
+    tb.innerHTML = rows.map(r => `<tr data-id="${r.id}">
+      <td>${fdt(r.creado)}</td><td>${r.propia ? '<span class="ok">Tu concesionario</span>' : '<span class="mut">Otro concesionario</span>'}</td>
+      <td class="mono">${r.vin ? esc(r.vin) : '—'}</td><td>${r.voltaje ?? '—'}</td><td>${r.soc ?? '—'}%</td><td>${r.soh ?? '—'}%</td>
+      <td>${r.ciclos ?? '—'}</td><td>${difTxt(r.celda_dif)}</td><td>${estadoTxt(r)}</td></tr>`).join('');
+    tb.querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => detalle(tr.dataset.id, serieActual));
+  } catch (e) { onErr(e, tb); }
+}
+$('btnSerie').onclick = buscarSerie;
+$('fSerie').addEventListener('keydown', e => { if (e.key === 'Enter') buscarSerie(); });
+
+// ---------------- Detalle de una lectura ----------------
+async function detalle(id, serie){
+  $('det').hidden = false; $('detBody').innerHTML = '<span class="mut">Cargando…</span>';
+  try {
+    const d = await rpc('consulta_detalle', { p_token: ses.token, p_id: Number(id), p_serie: serie || null });
+    const c = d.celdas || [], mx = Math.max(...c), mn = Math.min(...c), t = d.temps || [];
+    $('detBody').innerHTML = `
+      <div class="row" style="justify-content:space-between"><b class="mono">${esc(d.serie_bateria)}</b><button id="btnCerrar">Cerrar</button></div>
+      <div class="grid2" style="margin:10px 0">
+        <span class="mut">Fecha</span><span>${fdt(d.creado)}</span>
+        <span class="mut">VIN</span><span class="mono">${esc(d.vin) || '—'}</span>
+        <span class="mut">Lectura de</span><span>${d.propia ? 'Tu concesionario' + (d.tecnico ? ' · ' + esc(d.tecnico) : '') : 'Otro concesionario'}</span>
+        <span class="mut">Tensión</span><span>${d.voltaje ?? '—'} V</span>
+        <span class="mut">Corriente</span><span>${d.corriente ?? '—'} A</span>
+        <span class="mut">SOC / SOH</span><span>${d.soc ?? '—'}% / ${d.soh ?? '—'}%</span>
+        <span class="mut">Ciclos</span><span>${d.ciclos ?? '—'}</span>
+        <span class="mut">Capacidad</span><span>${d.rm_mah != null ? (d.rm_mah / 1000).toFixed(1) : '—'} / ${d.fcc_mah != null ? (d.fcc_mah / 1000).toFixed(1) : '—'} Ah</span>
+        <span class="mut">Desbalance</span><span>${difTxt(d.celda_dif)} mV</span>
+        <span class="mut">Temperaturas</span><span>${t.length ? `NTC1 ${t[0]}° · NTC2 ${t[1]}° · Aire ${t[2]}° · FET ${t[3]}°` : '—'}</span>
+        <span class="mut">Estado</span><span>${d.protect ? `<span class="bad">Protección 0x${Number(d.protect).toString(16).toUpperCase()}</span>` : d.alarm ? `<span class="warn">Alarma 0x${Number(d.alarm).toString(16).toUpperCase()}</span>` : '<span class="ok">Sin fallas</span>'}</span>
+      </div>
+      ${c.length ? `<b style="font-size:14px">Celdas (mV)</b><div class="cells" style="margin-top:6px">${c.map((v, k) =>
+        `<div><small>${k + 1}</small><span class="${v === mx ? 'ok' : v === mn ? 'warn' : ''}">${v}</span></div>`).join('')}</div>
+        <p class="mut" style="margin:6px 0 0">Verde = más alta · naranja = más baja</p>` : ''}`;
+    $('btnCerrar').onclick = () => $('det').hidden = true;
+  } catch (e) {
+    if (e.code === 'SESION_VENCIDA' || e.code === 'BLOQUEADO') { $('det').hidden = true; return salir(e.message); }
+    $('detBody').innerHTML = `<div class="bad">${esc(e.message)}</div><button onclick="$('det').hidden=true" style="margin-top:10px">Cerrar</button>`;
+  }
+}
+$('det').onclick = e => { if (e.target.id === 'det') $('det').hidden = true; };
+
+// ---------------- CSV ----------------
+$('btnCsv').onclick = () => {
+  if (!mias.length) return;
+  const cols = [['creado','Fecha'],['serie_bateria','Batería'],['vin','VIN'],['tecnico','Técnico'],['voltaje','V'],['corriente','A'],['soc','SOC %'],['soh','SOH %'],['ciclos','Ciclos'],['celda_dif','Dif mV'],['protect','Protección'],['alarm','Alarma']];
+  const csv = [cols.map(c => c[1]), ...mias.map(r => cols.map(([k]) => k === 'creado' ? fdt(r[k]) : r[k] ?? ''))]
+    .map(row => row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type:'text/csv' }));
+  a.download = 'sunra-lecturas-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+};
+
+showSession();
+</script>
+</body>
+</html>
