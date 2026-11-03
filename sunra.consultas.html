@@ -50,7 +50,7 @@
 <!-- INGRESO: con el escaner y su boton -->
 <section id="login" class="card">
   <h2 style="margin:0 0 8px;font-size:18px">Ingresar con tu escáner</h2>
-  <p class="mut" style="margin:0 0 12px">Tené el escáner encendido y cerca. Al conectarlo te va a pedir que <b>aprietes el botón BOOT</b> del escáner: esa es tu contraseña. Si el escáner está bloqueado no se puede consultar.</p>
+  <p class="mut" style="margin:0 0 12px">Tené el escáner encendido y cerca. Al conectarlo te va a pedir que <b>aprietes el botón</b> del escáner: esa es tu contraseña. Si el escáner está bloqueado no se puede consultar.</p>
   <button class="pri" id="btnLogin" style="width:100%">Conectar escáner</button>
   <div id="loginMsg"></div>
   <p class="mut" style="margin:12px 0 0">Funciona en Chrome (Android o PC con Bluetooth). En iPhone usá la app <b>Bluefy</b>.</p>
@@ -145,7 +145,7 @@ function onErr(e, destino){
 }
 function loginMsg(cls, txt){ $('loginMsg').innerHTML = txt ? `<div class="msg ${cls}">${txt}</div>` : ''; }
 
-// ---------------- Ingreso con el escaner (Bluetooth + boton BOOT) ----------------
+// ---------------- Ingreso con el escaner (Bluetooth + boton del escaner) ----------------
 $('btnLogin').onclick = async () => {
   if (!navigator.bluetooth) { loginMsg('err', 'Este navegador no tiene Bluetooth. Usá Chrome en Android o PC, o Bluefy en iPhone.'); return; }
   let dev = null, timer = null;
@@ -185,7 +185,7 @@ $('btnLogin').onclick = async () => {
     const r1 = await pedir(Uint8Array.from([0xAB, ...new TextEncoder().encode(nonce)]), 0xAB, 5000);
     if (r1.startsWith('ERR')) throw new Error(r1.split('\t')[1] || 'El escáner rechazó la consulta');
     let seg = 30;
-    const cuenta = () => loginMsg('info big', `👉 Apretá el botón <b>BOOT</b> del escáner<br><span style="font-size:14px">${seg} s</span>`);
+    const cuenta = () => loginMsg('info big', `👉 Apretá el <b>botón</b> del escáner<br><span style="font-size:14px">${seg} s</span>`);
     cuenta(); timer = setInterval(() => { seg = Math.max(0, seg - 1); cuenta(); }, 1000);
     const r2 = await esperar(0xAB, 32000);
     clearInterval(timer); timer = null;
@@ -301,5 +301,7 @@ $('btnCsv').onclick = () => {
 
 showSession();
 </script>
+<div style="text-align:center;font-size:11px;color:#5d6b77;padding:14px 0 18px">Sunra Scanner · rev 1.0.0</div>
+<!-- REVISION: subir este numero cada vez que se cambia esta pagina -->
 </body>
 </html>
