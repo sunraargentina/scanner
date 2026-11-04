@@ -12,6 +12,7 @@
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:40px}
+  .menu{color:var(--mut);text-decoration:none;font-size:14px;border:1px solid var(--line);border-radius:10px;padding:7px 10px;white-space:nowrap}
   header{position:sticky;top:0;z-index:5;background:rgba(15,20,24,.95);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px}
   header h1{font-size:17px;margin:0;flex:1;letter-spacing:.3px}
   header h1 small{display:block;font-size:11px;color:var(--mut);font-weight:400}
@@ -82,6 +83,7 @@
 </head>
 <body>
 <header>
+  <a href="index.html" class="menu" id="btnMenu" title="Volver al menú principal">‹ Menú</a>
   <span class="dot" id="dot"></span>
   <h1>Sunra Scanner <small id="sub">Desconectado</small></h1>
   <button id="btnDemo">Demo</button>
@@ -383,6 +385,13 @@ function onPacket(bytes){
     const cmd = rxBuf[0], data = Uint8Array.from(rxBuf.slice(2, need));
     rxBuf = rxBuf.slice(need);
     if ((cmd >= 0xA0 && cmd <= 0xA9) || cmd === 0xEB) { onAuthPacket(cmd, new TextDecoder().decode(data)); continue; }
+    if (cmd === 0xAC) { logRaw('Escáner: batería ' + new TextDecoder().decode(data)); continue; }
+    if (cmd === 0xAD) { esc.escaneo = new TextDecoder().decode(data); logRaw('Escaneo ' + esc.escaneo); continue; }
+    if (cmd === 0xAE) {                                   // se desconecto la ficha: guardar el ultimo estado del escaneo
+      logRaw('Fin del escaneo ' + new TextDecoder().decode(data));
+      saveReading(true).then(() => { setSave('ok', 'Batería desconectada · último estado guardado ✓'); esc.escaneo = null; esc.fin = true; });
+      continue;
+    }
     logRaw('CMD ' + cmd.toString(16).padStart(2,'0') + ' [' + data.length + '] ' + hex(data));
     if (cmd === 1) { const x = decode(data); if (x) { render(x); onReading(x, data); if (dev && dev.gatt.connected) $('sub').textContent = 'Conectado · ' + dev.name; } }
   }
@@ -498,7 +507,7 @@ setInterval(flushQueue, 30000);
 
 // ================= Pantalla de inicio =================
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/;
-let session = null, lastX = null, lastRaw = null, savedThisConn = false, online = false;
+let session = null, lastX = null, lastXTs = 0, lastRaw = null, savedThisConn = false, online = false;
 
 $('fTec').value = LS.get('tecnico', '');
 
@@ -581,19 +590,22 @@ function buildRow(x, raw){
     voltaje: x.v, corriente: x.i, soc: x.soc, soh: x.soh, ciclos: x.cyc,
     rm_mah: x.rm, fcc_mah: x.fcc, celda_max: mx, celda_min: mn, celda_dif: mx - mn,
     celdas: x.cells, temps: x.t, protect: x.prot, alarm: x.alarm, estado: x.bst, fw: x.fw,
-    raw: hex(raw).replace(/ /g,'')
+    raw: hex(raw).replace(/ /g,''),
+    escaneo_id: esc.escaneo || esc.escaneoApp      // agrupa las lecturas del mismo escaneo (de conectar a desconectar la bateria)
   };
 }
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() :
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c === 'x' ? r : (r&3|8)).toString(16); }));
 
-async function saveReading(){
+async function saveReading(final){
   if (!session || !lastX || !DB_OK || !esc.ok) return;
   const row = buildRow(lastX, lastRaw);
   row.lectura_uid = uuid(); row.origen = 'app';
+  if (final && lastXTs) row.leido_en = new Date(lastXTs).toISOString();   // instante anterior a desconectar
   // 1) Si el escaner tiene WiFi en linea, sube el directo. 2) Si falla, sube la app (sin duplicar: mismo lectura_uid)
-  if (esc.wifi === 3) {
+  // (el ultimo estado de un escaneo lo sube siempre la app: el escaner ya no tiene la lectura)
+  if (esc.wifi === 3 && !final) {
     setSave('', 'Enviando por WiFi del escáner…');
     const r = await escUpload(row);
     if (r.ok) { setSave('ok', 'Guardado ✓ por WiFi del escáner ' + new Date().toLocaleTimeString()); return; }
@@ -609,17 +621,22 @@ async function saveReading(){
 
 // Se llama con cada lectura del BMS. Guarda automaticamente la primera de cada conexion.
 function onReading(x, raw){
-  lastX = x; lastRaw = raw;
   const real = dev && dev.gatt && dev.gatt.connected && esc.ok;
+  if (real && esc.fin) {                                  // la bateria de esta lectura ya se desconecto
+    $('btnSave').disabled = true;
+    setSave('err', 'Se desconectó la batería. Para leer otra, tocá Nueva lectura');
+    return;
+  }
+  lastX = x; lastRaw = raw; lastXTs = Date.now();
   $('btnSave').disabled = !real;
   if (real && !savedThisConn) { savedThisConn = true; saveReading(); }
   if (!real && !$('saveSt').textContent.startsWith('Guardado')) setSave('', 'Modo demo: no se guarda');
 }
-$('btnSave').onclick = saveReading;
+$('btnSave').onclick = () => saveReading(false);
 
 // cada nueva conexion BLE vuelve a guardar automaticamente
 const _connect = connect;
-connect = async () => { savedThisConn = false; $('hcBody').innerHTML = ''; $('hcInfo').textContent = ''; $('btnHist').textContent = 'Ver historial completo'; esc = { id:null, ok:false, wifi:0 }; setBlocked(false); $('updCard').hidden = true; $('updProg').hidden = true; $('updBtns').hidden = false; upd = null; showAuth(''); $('regCard').hidden = true; $('wifiAsk').hidden = true; $('wifiCard').hidden = true; renderWifi(); $('uEsc').textContent = 'conectando…'; await _connect(); };
+connect = async () => { savedThisConn = false; $('hcBody').innerHTML = ''; $('hcInfo').textContent = ''; $('btnHist').textContent = 'Ver historial completo'; esc = { id:null, ok:false, wifi:0, escaneo:null, escaneoApp:uuid() }; setBlocked(false); $('updCard').hidden = true; $('updProg').hidden = true; $('updBtns').hidden = false; upd = null; showAuth(''); $('regCard').hidden = true; $('wifiAsk').hidden = true; $('wifiCard').hidden = true; renderWifi(); $('uEsc').textContent = 'conectando…'; await _connect(); };
 
 // ================= Vinculacion / bloqueo del escaner =================
 let esc = { id:null, ok:false };
@@ -844,6 +861,9 @@ async function onAuthPacket(type, text){
       $('uEsc').textContent = `${esc.id} · ${session.clienteNombre} (N° ${session.cliente})` + (text === 'VINCULADO' ? ' · asociado ✓' : ' ✓') + (esc.fw ? ' · FW ' + esc.fw : '');
       setSave('', 'Leyendo…');
       setBlocked(false); renderWifi(); maybeAskWifi(); checkUpdate();
+      // El escaner recuerda que bateria es (mientras no se desconecte la ficha) para seguir guardando por WiFi
+      const cl = v => String(v || '').replace(/[\t\n\r]/g, ' ').trim();
+      bleWrite(Uint8Array.from([0xAC, ...new TextEncoder().encode([cl(session.serie), cl(session.vin), cl(session.tecnico)].join('\t'))])).catch(() => {});
     } else if (text === 'BLOQUEADO') {
       esc.ok = false; $('uEsc').textContent = esc.id + ' · BLOQUEADO';
       showAuth(''); setSave('err', 'Bloqueado'); setBlocked(true);
@@ -886,10 +906,11 @@ async function verHistorial(){
     if (!r.ok) { let m = t; try { m = JSON.parse(t).message || t; } catch {} throw new Error(m === 'ESCANER_NO_HABILITADO' ? 'El escáner no está habilitado.' : m); }
     const rows = JSON.parse(t);
     $('hcInfo').textContent = rows.length ? rows.length + ' lecturas' : '';
-    $('hcMsg').textContent = rows.length ? 'Batería ' + serie + ' · más reciente arriba' : 'Esta batería no tiene lecturas guardadas todavía.';
+    const nEsc = new Set(rows.map(r => r.escaneo_id || r.creado)).size;
+    $('hcMsg').textContent = rows.length ? `Batería ${serie} · ${nEsc} escaneo${nEsc === 1 ? '' : 's'} · más reciente arriba (una línea separa cada escaneo)` : 'Esta batería no tiene lecturas guardadas todavía.';
     const est = r => r.protect ? '<span style="color:var(--bad)">Prot.</span>' : r.alarm ? '<span style="color:var(--warn)">Alarma</span>' : '<span style="color:var(--acc)">OK</span>';
     $('hcBody').innerHTML = rows.length ? '<table class="hist"><tr><th>Fecha</th><th>VIN</th><th>V</th><th>SOC</th><th>SOH</th><th>Ciclos</th><th>Dif</th><th></th></tr>' +
-      rows.map(r => `<tr><td>${new Date(r.creado).toLocaleDateString()}</td><td>${r.vin ? '…' + esc_(r.vin.slice(-6)) : '—'}</td>` +
+      rows.map((r, k) => `<tr${k && r.escaneo_id !== rows[k - 1].escaneo_id ? ' style="border-top:2px solid var(--mut)"' : ''}><td>${new Date(r.creado).toLocaleString([], { dateStyle:'short', timeStyle:'short' })}</td><td>${r.vin ? '…' + esc_(r.vin.slice(-6)) : '—'}</td>` +
         `<td>${r.voltaje ?? '-'}</td><td>${r.soc ?? '-'}%</td><td>${r.soh ?? '-'}%</td><td>${r.ciclos ?? '-'}</td><td>${r.celda_dif ?? '-'}</td><td>${est(r)}</td></tr>`).join('') + '</table>' : '';
     b.textContent = 'Actualizar historial';
   } catch (e) {
@@ -897,6 +918,10 @@ async function verHistorial(){
   } finally { b.disabled = false; }
 }
 $('btnHist').onclick = verHistorial;
+// Volver al menu: si el escaner esta conectado, avisar (se desconecta al salir)
+$('btnMenu').onclick = e => {
+  if (typeof dev !== 'undefined' && dev && dev.gatt && dev.gatt.connected && !confirm('El escáner se va a desconectar. ¿Volver al menú?')) e.preventDefault();
+};
 
 // ================= Lector de codigo de barras (camara) =================
 let scanStream = null, scanTarget = null, scanLoop = null;
@@ -1190,7 +1215,7 @@ showView(false);
 updateNet();
 flushQueue();
 </script>
-<div style="text-align:center;font-size:11px;color:#5d6b77;padding:14px 0 18px">Sunra Scanner · rev 1.1.0</div>
+<div style="text-align:center;font-size:11px;color:#5d6b77;padding:14px 0 18px">Sunra Scanner · rev 1.4.0</div>
 <!-- REVISION: subir este numero cada vez que se cambia esta pagina -->
 </body>
 </html>

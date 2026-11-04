@@ -11,6 +11,7 @@
   body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
   header{position:sticky;top:0;z-index:5;background:rgba(15,20,24,.96);border-bottom:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px}
   header h1{font-size:17px;margin:0;flex:1} header h1 small{display:block;font-size:11px;color:var(--mut);font-weight:400}
+  .menu{color:var(--mut);text-decoration:none;font-size:14px;border:1px solid var(--line);border-radius:10px;padding:7px 10px;white-space:nowrap}
   .logo{width:10px;height:22px;background:var(--yel);border-radius:3px}
   button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--txt);border-radius:10px;padding:8px 12px;cursor:pointer}
   button.pri{background:var(--acc);color:#04210f;border-color:var(--acc);font-weight:600}
@@ -43,6 +44,7 @@
 </head>
 <body>
 <header>
+  <a href="index.html" class="menu" id="btnMenu" title="Volver al menú principal">‹ Menú</a>
   <span class="logo"></span>
   <h1>Sunra Scanner · Administración <small id="who">—</small></h1>
   <button id="btnOut" hidden>Salir</button>
@@ -297,7 +299,7 @@ $('fUso').addEventListener('keydown', e => { if (e.key === 'Enter') loadUsos(); 
 
 // ---------------- Baterias y lecturas ----------------
 const COLS_RES = [['serie_bateria','Batería'],['vin_actual','VIN actual'],['cliente_nombre','Concesionario'],['ultima_lectura','Última lectura'],['soh','SOH %'],['ciclos','Ciclos'],['soc','SOC %'],['celda_dif','Dif mV'],['protect','Prot.']];
-const COLS_LEC = [['creado','Fecha'],['serie_bateria','Batería'],['vin','VIN'],['cliente_nombre','Concesionario'],['tecnico','Técnico'],['voltaje','V'],['corriente','A'],['soc','SOC %'],['soh','SOH %'],['ciclos','Ciclos'],['celda_dif','Dif mV'],['protect','Prot.'],['alarm','Alarma']];
+const COLS_LEC = [['creado','Fecha'],['escaneo_id','Escaneo'],['serie_bateria','Batería'],['vin','VIN'],['cliente_nombre','Concesionario'],['tecnico','Técnico'],['voltaje','V'],['corriente','A'],['soc','SOC %'],['soh','SOH %'],['ciclos','Ciclos'],['celda_dif','Dif mV'],['protect','Prot.'],['alarm','Alarma']];
 let batCols = COLS_RES;
 
 async function loadBat(){
@@ -309,17 +311,18 @@ async function loadBat(){
   } else {
     ({ data, error } = await sb.from('lecturas').select('*').or(`serie_bateria.eq.${f},vin.eq.${f}`).order('creado', { ascending:false }).limit(500));
     batCols = COLS_LEC;
-    $('batInfo').innerHTML = data ? `${data.length} lecturas para <b class="mono">${esc(f)}</b>` +
+    $('batInfo').innerHTML = data ? `${data.length} lecturas en ${new Set(data.map(r => r.escaneo_id || r.id)).size} escaneos para <b class="mono">${esc(f)}</b>` +
       (data.length ? ` <button class="bad" id="btnBatAll" style="padding:3px 10px;margin-left:8px">Borrar todas</button>` : '') : '';
     if ($('btnBatAll')) $('btnBatAll').onclick = () => limpiar('bateria', null, f);
   }
   if (error) { $('batBody').innerHTML = `<tr><td class="err">${esc(error.message)}</td></tr>`; return; }
   lastBat = data;
   $('batHead').innerHTML = '<tr>' + batCols.map(c => `<th>${c[1]}</th>`).join('') + (f ? '<th></th>' : '') + '</tr>';
-  $('batBody').innerHTML = data.length ? data.map(r => `<tr ${!f ? `data-serie="${esc(r.serie_bateria)}" style="cursor:pointer"` : ''}>` +
+  $('batBody').innerHTML = data.length ? data.map((r, i) => `<tr ${!f ? `data-serie="${esc(r.serie_bateria)}" style="cursor:pointer"` : (i && r.escaneo_id !== data[i - 1].escaneo_id ? 'style="border-top:2px solid var(--mut)"' : '')}>` +
     batCols.map(([k]) => {
       let v = r[k];
       if (k === 'creado' || k === 'ultima_lectura') v = fdt(v);
+      if (k === 'escaneo_id') v = v ? '…' + String(v).slice(-6) : '—';
       if ((k === 'protect' || k === 'alarm') && v) return `<td style="color:var(--bad)">0x${Number(v).toString(16).toUpperCase()}</td>`;
       if (k === 'protect' || k === 'alarm') v = '—';
       return `<td class="${k.includes('vin') || k === 'serie_bateria' ? 'mono' : ''}">${esc(v ?? '—')}</td>`;
@@ -454,7 +457,7 @@ $('btnFwUp').onclick = async () => {
 
 checkSession();
 </script>
-<div style="text-align:center;font-size:11px;color:#5d6b77;padding:14px 0 18px">Sunra Scanner · rev 1.1.0</div>
+<div style="text-align:center;font-size:11px;color:#5d6b77;padding:14px 0 18px">Sunra Scanner · rev 1.2.0</div>
 <!-- REVISION: subir este numero cada vez que se cambia esta pagina -->
 </body>
 </html>

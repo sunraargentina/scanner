@@ -11,6 +11,7 @@
   body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
   header{position:sticky;top:0;z-index:5;background:rgba(15,20,24,.96);border-bottom:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px}
   header h1{font-size:17px;margin:0;flex:1} header h1 small{display:block;font-size:11px;color:var(--mut);font-weight:400}
+  .menu{color:var(--mut);text-decoration:none;font-size:14px;border:1px solid var(--line);border-radius:10px;padding:7px 10px;white-space:nowrap}
   .logo{width:10px;height:22px;background:var(--yel);border-radius:3px}
   button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--txt);border-radius:10px;padding:8px 12px;cursor:pointer}
   button.pri{background:var(--acc);color:#04210f;border-color:var(--acc);font-weight:600}
@@ -42,6 +43,7 @@
 </head>
 <body>
 <header>
+  <a href="index.html" class="menu" id="btnMenu" title="Volver al menú principal">‹ Menú</a>
   <span class="logo"></span>
   <h1>Sunra Scanner · Consultas <small id="who">Sin sesión</small></h1>
   <button id="btnOut" hidden>Salir</button>
@@ -50,7 +52,7 @@
 <!-- INGRESO: con el escaner y su boton -->
 <section id="login" class="card">
   <h2 style="margin:0 0 8px;font-size:18px">Ingresar con tu escáner</h2>
-  <p class="mut" style="margin:0 0 12px">Tené el escáner encendido y cerca. Al conectarlo te va a pedir que <b>aprietes el botón</b> del escáner: esa es tu contraseña. Si el escáner está bloqueado no se puede consultar.</p>
+  <p class="mut" style="margin:0 0 12px">Tené el escáner encendido y cerca. Al conectarlo te va a pedir que <b>aprietes el botón del escáner</b>. Esa es tu contraseña. Si el escáner está bloqueado, no se pueden realizar consultas.</p>
   <button class="pri" id="btnLogin" style="width:100%">Conectar escáner</button>
   <div id="loginMsg"></div>
   <p class="mut" style="margin:12px 0 0">Funciona en Chrome (Android o PC con Bluetooth). En iPhone usá la app <b>Bluefy</b>.</p>
@@ -226,7 +228,7 @@ async function buscarMias(){
     $('sLec').textContent = mias.length;
     $('sBat').textContent = new Set(mias.map(r => r.serie_bateria)).size;
     $('sAle').textContent = mias.filter(r => r.protect || r.alarm || r.celda_dif > 80).length;
-    tb.innerHTML = mias.length ? mias.map(r => `<tr data-id="${r.id}">
+    tb.innerHTML = mias.length ? mias.map((r, i) => `<tr data-id="${r.id}"${i && r.escaneo_id !== mias[i - 1].escaneo_id ? ' style="border-top:2px solid var(--mut)"' : ''}>
       <td>${fdt(r.creado)}</td><td class="mono">${esc(r.serie_bateria)}</td><td class="mono">${r.vin ? '…' + esc(r.vin.slice(-6)) : '—'}</td>
       <td>${esc(r.tecnico) || '—'}</td><td>${r.voltaje ?? '—'}</td><td>${r.soc ?? '—'}%</td><td>${r.soh ?? '—'}%</td>
       <td>${r.ciclos ?? '—'}</td><td>${difTxt(r.celda_dif)}</td><td>${estadoTxt(r)}</td></tr>`).join('')
@@ -244,8 +246,8 @@ async function buscarSerie(){
   try {
     const rows = await rpc('consulta_bateria', { p_token: ses.token, p_serie: s });
     serieActual = s;
-    $('batInfo').innerHTML = rows.length ? `${rows.length} lecturas de <b class="mono">${esc(s)}</b>` : `No hay lecturas de <b class="mono">${esc(s)}</b>`;
-    tb.innerHTML = rows.map(r => `<tr data-id="${r.id}">
+    $('batInfo').innerHTML = rows.length ? `${rows.length} lecturas en ${new Set(rows.map(r => r.escaneo_id || r.id)).size} escaneos de <b class="mono">${esc(s)}</b> (una línea separa cada escaneo)` : `No hay lecturas de <b class="mono">${esc(s)}</b>`;
+    tb.innerHTML = rows.map((r, i) => `<tr data-id="${r.id}"${i && r.escaneo_id !== rows[i - 1].escaneo_id ? ' style="border-top:2px solid var(--mut)"' : ''}>
       <td>${fdt(r.creado)}</td><td>${r.propia ? '<span class="ok">Tu concesionario</span>' : '<span class="mut">Otro concesionario</span>'}</td>
       <td class="mono">${r.vin ? esc(r.vin) : '—'}</td><td>${r.voltaje ?? '—'}</td><td>${r.soc ?? '—'}%</td><td>${r.soh ?? '—'}%</td>
       <td>${r.ciclos ?? '—'}</td><td>${difTxt(r.celda_dif)}</td><td>${estadoTxt(r)}</td></tr>`).join('');
@@ -301,7 +303,7 @@ $('btnCsv').onclick = () => {
 
 showSession();
 </script>
-<div style="text-align:center;font-size:11px;color:#5d6b77;padding:14px 0 18px">Sunra Scanner · rev 1.0.0</div>
+<div style="text-align:center;font-size:11px;color:#5d6b77;padding:14px 0 18px">Sunra Scanner · rev 1.1.0</div>
 <!-- REVISION: subir este numero cada vez que se cambia esta pagina -->
 </body>
 </html>
